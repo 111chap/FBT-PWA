@@ -17,21 +17,25 @@ async function main() {
     await page.goto(base+'/app/#bills');await page.locator('#search').fill('Sort fixture');
     assert.equal(await page.locator('#bill-view-filters [name=sort]').count(),0);
     const heading=key=>page.locator(`#bills .sort-heading[data-sort=${key}]`);
-    await heading('title').click();assert.deepEqual(await titles(),['Sort fixture Alpha','Sort fixture Beta','Sort fixture Delta','Sort fixture Gamma']);
+    await heading('title').click();assert.deepEqual(await titles(),['Sort fixture Alpha','Sort fixture Beta','Sort fixture Gamma']);
+    assert.equal(await page.locator('#status-filter option[value=paid]').count(),0);
     await heading('title').click();assert.equal((await titles())[0],'Sort fixture Gamma');
     await heading('original').click();assert.equal((await titles())[0],'Sort fixture Alpha');
     await heading('original').click();assert.equal((await titles())[0],'Sort fixture Beta');
     await heading('date').click();assert.equal((await titles())[0],'Sort fixture Gamma');
     await heading('date').click();assert.equal((await titles())[0],'Sort fixture Alpha');
     await heading('amount').click();assert.equal((await titles())[0],'Sort fixture Alpha');
-    await heading('amount').click();assert.equal((await titles())[0],'Sort fixture Delta');
-    await heading('status').click();assert.deepEqual(await titles(),['Sort fixture Delta','Sort fixture Alpha','Sort fixture Beta','Sort fixture Gamma']);
+    await heading('amount').click();assert.equal((await titles())[0],'Sort fixture Beta');
+    await heading('status').click();assert.deepEqual(await titles(),['Sort fixture Alpha','Sort fixture Beta','Sort fixture Gamma']);
     assert.equal(await heading('status').locator('..').getAttribute('aria-sort'),'ascending');
     await heading('status').click();assert.equal((await titles())[0],'Sort fixture Gamma');
-    await page.locator('#bill-view-filters [name=max]').fill('20');assert.equal(await page.locator('#bill-rows tr').count(),3);
+    await page.locator('#bill-view-filters [name=max]').fill('20');assert.equal(await page.locator('#bill-rows tr').count(),2);
     await page.locator('#refresh-online').click();await page.waitForFunction(()=>document.querySelector('#bill-sort-description').textContent.includes('Overdue → Upcoming'));
     assert.equal((await titles())[0],'Sort fixture Gamma');
     await page.locator('#bill-view-filters [name=max]').fill('');
+    await heading('original').hover();
+    await page.screenshot({path:'tmp/browser-qa/bill-heading-hover.png',fullPage:true});
+    await page.mouse.move(0,0);
     await page.screenshot({path:'tmp/browser-qa/bill-column-sort.png',fullPage:true});
     await page.goto(base+'/app/#history');await page.locator('#history').waitFor({state:'visible'});
     assert.match(await page.locator('#history-summary').innerText(),/28 fully paid bills/);
@@ -81,6 +85,15 @@ async function main() {
     const after=await snapshot();assert(Array.isArray(after.loans),JSON.stringify(after));assert(Array.isArray(initial.loans),JSON.stringify(initial));assert.equal(after.loans.length,initial.loans.length+1);assert.equal(after.bills.length,initial.bills.length+3);assert(!after.bills.some(b=>b.title==='Utilities draft'));
     const created=after.bills.filter(b=>b.title.startsWith('Guided car'));assert.deepEqual(created.map(b=>b.amount),['333.33','333.33','333.34']);
     await page.goto(base+'/app/#loans');await page.locator('#add-loan').click();await page.locator('#loan-dialog').waitFor();await page.locator('#loan-dialog .close-dialog').click();
+    // Completing a bill moves its presentation to history without removing its record.
+    await page.goto(base+'/app/#bills');await page.locator('#search').fill('Sort fixture Gamma');
+    await page.locator('#bill-rows .pay-bill').click();await page.locator('#payment-form .primary').click();await page.locator('.review-dialog .primary').click();
+    await page.waitForFunction(()=>document.querySelectorAll('#bill-rows tr').length===0);
+    await page.goto(base+'/app/#history');await page.locator('#history-filters [type=reset]').click();
+    await page.waitForFunction(()=>document.querySelector('#history-filters').elements.payer.value==='');
+    await page.locator('#history-filters [name=search]').fill('Sort fixture Gamma');
+    assert.equal(await page.locator('#history-rows tr').count(),1);
+    const retained=(await snapshot()).bills.find(b=>b.title==='Sort fixture Gamma');assert.equal(retained.balance,'0.00');assert.equal(retained.payments.length,1);
     assert.deepEqual(errors,[]);
     console.log('Guided bill entry, loan preview, shared paid history, pagination, heading sorting and offline member workflows passed.');
   } catch(error) {console.error('Browser errors:',errors);for(const [i,p] of pages.entries()) if(!p.isClosed()){console.error('Page:',p.url(),await p.locator('body').innerText().catch(()=>''));await p.screenshot({path:`tmp/browser-qa/bill-views-failure-${i}.png`,fullPage:true}).catch(()=>{});}throw error;}

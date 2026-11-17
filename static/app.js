@@ -102,7 +102,7 @@
     if (!data) return;
     const search = $('search').value.toLowerCase();
     const filter = $('status-filter').value;
-    const bills = FBTFilters.filterRecords(data.bills, {...viewFilters('bill'), search, status:filter, sort:billSort});
+    const bills = FBTFilters.filterRecords(data.bills.filter(b=>Number(b.balance)>0), {...viewFilters('bill'), search, status:filter, sort:billSort});
     $('bill-rows').innerHTML = bills.map(row).join('');
     $('bills-empty').hidden = bills.length > 0;
     updateSortHeadings();
@@ -110,16 +110,16 @@
   function viewFilters(prefix) {
     return Object.fromEntries(new FormData($(`${prefix}-view-filters`)));
   }
-  const sortNames={title:'Bill',date:'Due date',original:'Original amount',amount:'Unpaid amount',status:'Status'};
+  const sortNames={title:'Bill name',date:'Due date',original:'Original amount',amount:'Amount unpaid',status:'Payment status'};
   const firstSort={title:'asc',date:'asc',original:'desc',amount:'desc',status:'asc'};
-  const sortDirection=(key,direction)=>key==='title'?(direction==='asc'?'A–Z':'Z–A'):key==='date'?(direction==='asc'?'earliest first':'latest first'):key==='status'?(direction==='asc'?'Paid → Part paid → Upcoming → Overdue':'Overdue → Upcoming → Part paid → Paid'):(direction==='asc'?'lowest first':'highest first');
+  const sortDirection=(key,direction)=>key==='title'?(direction==='asc'?'A–Z':'Z–A'):key==='date'?(direction==='asc'?'earliest first':'latest first'):key==='status'?(direction==='asc'?'Part paid → Upcoming → Overdue':'Overdue → Upcoming → Part paid'):(direction==='asc'?'lowest first':'highest first');
   $('mobile-bill-sort').innerHTML=Object.entries(sortNames).map(([key,name])=>`<button type="button" class="button secondary" data-sort="${key}" data-sort-name="${name}">${name}<span aria-hidden="true"></span></button>`).join('');
   function updateSortHeadings() {
     const [key,direction]=billSort.split('-');
     document.querySelectorAll('[data-sort]').forEach(button=> {
       const active=button.dataset.sort===key;
       const next=active?(direction==='asc'?'desc':'asc'):firstSort[button.dataset.sort];
-      button.querySelector('span').textContent=active?(direction==='asc'?' ↑':' ↓'):'';
+      button.querySelector('span').textContent=active?(direction==='asc'?' ↑':' ↓'):' ↕';
       button.setAttribute('aria-label',`${sortNames[button.dataset.sort]}: sort ${sortDirection(button.dataset.sort,next)}`);
       button.closest('th')?.setAttribute('aria-sort',active?(direction==='asc'?'ascending':'descending'):'none');
       if(button.closest('#mobile-bill-sort')) button.setAttribute('aria-pressed',String(active));
