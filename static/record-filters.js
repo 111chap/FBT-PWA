@@ -6,8 +6,9 @@
   function sortRecords(records, sort='date-asc') {
     const [key,direction]=sort.split('-'), sign=direction==='desc'?-1:1;
     return [...records].sort((a,b)=> {
-      if(key==='date' && (!a.due_date || !b.due_date)) return a.due_date?-1:b.due_date?1:a.id-b.id;
-      const compare=key==='title'?titleOrder.compare(a.title,b.title):key==='status'?(STATUS_RANK[a.status]??4)-(STATUS_RANK[b.status]??4):key==='original'?Number(a.amount)-Number(b.amount):key==='amount'?Number(a.balance)-Number(b.balance):a.due_date.localeCompare(b.due_date);
+      const dateA=key==='due'?a.original_due_date:a.due_date, dateB=key==='due'?b.original_due_date:b.due_date;
+      if((key==='date' || key==='due') && (!dateA || !dateB)) return dateA?-1:dateB?1:a.id-b.id;
+      const compare=key==='title'?titleOrder.compare(a.title,b.title):key==='status'?(STATUS_RANK[a.status]??4)-(STATUS_RANK[b.status]??4):key==='original'?Number(a.amount)-Number(b.amount):key==='amount'?Number(a.balance)-Number(b.balance):key==='paid'?Number(a.total_paid)-Number(b.total_paid):dateA.localeCompare(dateB);
       return compare*sign || a.id-b.id;
     });
   }
@@ -22,18 +23,20 @@
       const installments = bills.filter(b => b.loan_id === loan.id);
       const unpaid = installments.filter(b => Number(b.balance)>0).sort((a,b)=>a.due_date.localeCompare(b.due_date) || a.id-b.id);
       const balance = installments.reduce((total,b)=>total+Math.round(Number(b.balance)*100),0)/100;
-      return {...loan, balance, due_date:unpaid[0]?.due_date || null, status:balance>0?'unpaid':'paid', paidCount:installments.filter(b=>Number(b.balance)<=0).length, responsible:[...new Set(installments.map(b=>b.responsible))].join(', ')};
+      const status=balance<=0?'paid':unpaid.some(b=>b.status==='overdue')?'overdue':balance<Number(loan.total)?'partial':'upcoming';
+      return {...loan, amount:loan.total, balance, due_date:unpaid[0]?.due_date || null, status, paidCount:installments.filter(b=>Number(b.balance)<=0).length, responsible:[...new Set(installments.map(b=>b.responsible))].join(', ')};
     });
   }
   function identityKey(id,name) { return id == null ? `name:${name}` : String(id); }
-  function paidHistory(bills,{search='',payer='',recorder='',from='',to='',sort='date-desc'}={}) {
+  function paidHistory(bills,{search='',payer='',recorder='',from='',to='',min='',max='',sort='date-desc'}={}) {
     const records=bills.filter(b=>Number(b.balance)<=0 && b.payments.length).map(b=>({...b,
       completed_date:b.payments.map(p=>p.paid_date).sort().at(-1),
       total_paid:(b.payments.reduce((n,p)=>n+Math.round(Number(p.amount)*100),0)/100).toFixed(2)}))
       .filter(b=>`${b.title} ${b.category} ${b.responsible}`.toLowerCase().includes(search.toLowerCase()) &&
         (!payer || identityKey(b.responsible_id,b.responsible)===payer) &&
         (!recorder || b.payments.some(p=>identityKey(p.recorded_by_id,p.recorded_by)===recorder)) &&
-        (!from || b.completed_date>=from) && (!to || b.completed_date<=to));
+        (!from || b.completed_date>=from) && (!to || b.completed_date<=to) &&
+        (min==='' || Number(b.amount)>=Number(min)) && (max==='' || Number(b.amount)<=Number(max)));
     // Sort a projected copy so history date means completion and amount means original amount.
     return sortRecords(records.map(b=>({...b,original_due_date:b.due_date,due_date:b.completed_date,balance:b.amount})),sort)
       .map(({original_due_date,...b})=>({...b,due_date:original_due_date,balance:'0.00'}));

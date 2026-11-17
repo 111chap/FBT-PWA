@@ -5,7 +5,7 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
   let data = null, connected = false, pendingRefresh = false, checking = false, signingOut = false;
   let auditEvents = [], auditPageNumber = 1, auditTransaction = '', selectedAudit = null, auditRequest = 0;
-  let billSort='date-asc', historyPage=1;
+  let billSort='date-asc', loanSort='date-asc', historySort='date-desc', historyPage=1;
   const historyPageSize=25;
   let offlineEnabled = localStorage.getItem('fbt-offline-enabled') === 'yes';
   const currency = value => new Intl.NumberFormat('en-PH', {style:'currency', currency:'PHP'}).format(Number(value));
@@ -96,7 +96,7 @@
     }
   }
   function row(bill) {
-    return `<tr><td><button class="bill-detail" data-id="${bill.id}">${esc(bill.title)}</button><span class="small muted">${esc(bill.category)} · Primary payer: ${esc(bill.responsible)}${bill.recurring ? ' · Monthly' : ''}</span></td><td>${dateLabel(bill.due_date)}</td><td data-label="Original amount">${currency(bill.amount)}</td><td data-label="Unpaid amount">${currency(bill.balance)}</td><td>${badge(bill.status)}</td><td>${Number(bill.balance) > 0 ? `<button class="button secondary pay-bill" data-id="${bill.id}" data-online ${!connected || pendingRefresh ? 'disabled' : ''}>Record payment</button>` : '✓ Complete'}</td></tr>`;
+    return `<tr><td><button class="bill-detail" data-id="${bill.id}">${esc(bill.title)}</button><span class="small muted">${esc(bill.category)} · Primary payer: ${esc(bill.responsible)}${bill.recurring ? ' · Monthly' : ''}</span></td><td data-label="Due date">${dateLabel(bill.due_date)}</td><td data-label="Original amount">${currency(bill.amount)}</td><td data-label="Amount unpaid">${currency(bill.balance)}</td><td data-label="Payment status">${badge(bill.status)}</td><td>${Number(bill.balance) > 0 ? `<button class="button secondary pay-bill" data-id="${bill.id}" data-online ${!connected || pendingRefresh ? 'disabled' : ''}>Record payment</button>` : '✓ Complete'}</td></tr>`;
   }
   function renderBills() {
     if (!data) return;
@@ -110,27 +110,33 @@
   function viewFilters(prefix) {
     return Object.fromEntries(new FormData($(`${prefix}-view-filters`)));
   }
-  const sortNames={title:'Bill name',date:'Due date',original:'Original amount',amount:'Amount unpaid',status:'Payment status'};
-  const firstSort={title:'asc',date:'asc',original:'desc',amount:'desc',status:'asc'};
-  const sortDirection=(key,direction)=>key==='title'?(direction==='asc'?'A–Z':'Z–A'):key==='date'?(direction==='asc'?'earliest first':'latest first'):key==='status'?(direction==='asc'?'Part paid → Upcoming → Overdue':'Overdue → Upcoming → Part paid'):(direction==='asc'?'lowest first':'highest first');
-  $('mobile-bill-sort').innerHTML=Object.entries(sortNames).map(([key,name])=>`<button type="button" class="button secondary" data-sort="${key}" data-sort-name="${name}">${name}<span aria-hidden="true"></span></button>`).join('');
-  function updateSortHeadings() {
-    const [key,direction]=billSort.split('-');
-    document.querySelectorAll('[data-sort]').forEach(button=> {
+  const firstSort={title:'asc',date:'asc',due:'asc',original:'desc',amount:'desc',paid:'desc',status:'asc'};
+  const sortViews={
+    bill:{section:'bills',names:{title:'Bill name',date:'Due date',original:'Original amount',amount:'Amount unpaid',status:'Payment status'},get:()=>billSort,set:value=>{billSort=value;},render:renderBills},
+    loan:{section:'loans',names:{title:'Loan name',date:'Next due date',original:'Agreed total',amount:'Amount unpaid',status:'Payment status'},get:()=>loanSort,set:value=>{loanSort=value;},render:renderLoans},
+    history:{section:'history',names:{title:'Bill name',due:'Due date',original:'Original amount',paid:'Total paid',date:'Date fully paid'},get:()=>historySort,set:value=>{historySort=value;},render:()=>{historyPage=1;renderHistory();}}
+  };
+  const sortDirection=(view,key,direction)=>key==='title'?(direction==='asc'?'A–Z':'Z–A'):(key==='date'||key==='due')?(direction==='asc'?'earliest first':'latest first'):key==='status'?(direction==='asc'?`${view==='loan'?'Paid → ':''}Part paid → Upcoming → Overdue`:`Overdue → Upcoming → Part paid${view==='loan'?' → Paid':''}`):(direction==='asc'?'lowest first':'highest first');
+  function updateSortHeadings(view='bill') {
+    const config=sortViews[view], [key,direction]=config.get().split('-');
+    $(config.section).querySelectorAll('[data-sort]').forEach(button=> {
       const active=button.dataset.sort===key;
       const next=active?(direction==='asc'?'desc':'asc'):firstSort[button.dataset.sort];
       button.querySelector('span').textContent=active?(direction==='asc'?' ↑':' ↓'):' ↕';
-      button.setAttribute('aria-label',`${sortNames[button.dataset.sort]}: sort ${sortDirection(button.dataset.sort,next)}`);
+      button.setAttribute('aria-label',`${config.names[button.dataset.sort]}: sort ${sortDirection(view,button.dataset.sort,next)}`);
       button.closest('th')?.setAttribute('aria-sort',active?(direction==='asc'?'ascending':'descending'):'none');
-      if(button.closest('#mobile-bill-sort')) button.setAttribute('aria-pressed',String(active));
+      if(button.closest('.mobile-bill-sort')) button.setAttribute('aria-pressed',String(active));
     });
-    $('bill-sort-description').textContent=`Sorted by ${sortNames[key].toLowerCase()}: ${sortDirection(key,direction)}. Select a heading again to reverse.`;
+    $(`${view}-sort-description`).textContent=`Sorted by ${config.names[key].toLowerCase()}: ${sortDirection(view,key,direction)}. Select a heading again to reverse.`;
   }
-  document.querySelectorAll('[data-sort]').forEach(button=>button.addEventListener('click',()=> {
-    const [current,direction]=billSort.split('-'), key=button.dataset.sort;
-    billSort=`${key}-${key===current?(direction==='asc'?'desc':'asc'):firstSort[key]}`;
-    renderBills();
-  }));
+  for(const [view,config] of Object.entries(sortViews)) {
+    $(`mobile-${view}-sort`).innerHTML=Object.entries(config.names).map(([key,name])=>`<button type="button" class="button secondary" data-sort="${key}">${name}<span aria-hidden="true"></span></button>`).join('');
+    $(config.section).querySelectorAll('[data-sort]').forEach(button=>button.addEventListener('click',()=> {
+      const [current,direction]=config.get().split('-'), key=button.dataset.sort;
+      config.set(`${key}-${key===current?(direction==='asc'?'desc':'asc'):firstSort[key]}`);
+      config.render();
+    }));
+  }
   function renderHistoryMembers() {
     const payers=new Map(data.members.map(m=>[String(m.id),m.username])), recorders=new Map();
     for(const bill of data.bills) {
@@ -145,29 +151,30 @@
   }
   function renderHistory() {
     if(!data) return;
-    const filters=Object.fromEntries(new FormData($('history-filters')));
-    const invalid=filters.from && filters.to && filters.from>filters.to;
+    const filters={...Object.fromEntries(new FormData($('history-filters'))),sort:historySort};
+    const invalid=(filters.from && filters.to && filters.from>filters.to) || (filters.min!=='' && filters.max!=='' && Number(filters.min)>Number(filters.max));
     const records=invalid?[]:FBTFilters.paidHistory(data.bills,filters);
     const pages=Math.max(1,Math.ceil(records.length/historyPageSize)); historyPage=Math.min(historyPage,pages);
     $('history-rows').innerHTML=records.slice((historyPage-1)*historyPageSize,historyPage*historyPageSize).map(bill=> {
       const loan=data.loans.find(loan=>loan.id===bill.loan_id);
-      return `<tr><td><strong>${esc(bill.title)}</strong><span class="small muted">${esc(bill.category)} · Primary payer: ${esc(bill.responsible)}${loan?` · Loan: ${esc(loan.title)}`:''}</span></td><td data-label="Original amount">${currency(bill.amount)}</td><td data-label="Total recorded">${currency(bill.total_paid)}</td><td data-label="Due date">${dateLabel(bill.due_date)}</td><td data-label="Fully paid">${dateLabel(bill.completed_date)}</td><td><button class="button secondary bill-detail" data-id="${bill.id}">Review payments</button></td></tr>`;
+      return `<tr><td><button class="bill-detail" data-id="${bill.id}">${esc(bill.title)}</button><span class="small muted">${esc(bill.category)} · Primary payer: ${esc(bill.responsible)}${loan?` · Loan: ${esc(loan.title)}`:''}</span></td><td data-label="Due date">${dateLabel(bill.due_date)}</td><td data-label="Original amount">${currency(bill.amount)}</td><td data-label="Total paid">${currency(bill.total_paid)}</td><td data-label="Date fully paid">${dateLabel(bill.completed_date)}</td><td><button class="button secondary bill-detail" data-id="${bill.id}">Review payments</button></td></tr>`;
     }).join('');
     $('history-empty').hidden=records.length>0;
-    $('history-summary').textContent=invalid?'Start date must not be after the end date.':`${records.length} fully paid bill${records.length===1?'':'s'} · Shared family history · Saved ${stamp(data.synced_at)}`;
+    $('history-summary').textContent=invalid?'Check the date and amount ranges: minimum must not exceed maximum.':`${records.length} fully paid bill${records.length===1?'':'s'} · Shared family history · Saved ${stamp(data.synced_at)}`;
     $('history-page').textContent=`Page ${historyPage} of ${pages}`;
     $('history-previous').disabled=historyPage<=1; $('history-next').disabled=historyPage>=pages;
+    updateSortHeadings('history');
   }
   const updateHistoryFilters=()=> {historyPage=1;renderHistory();};
   $('history-filters').addEventListener('input',updateHistoryFilters);
   $('history-filters').addEventListener('change',event=> {if(event.target.tagName==='SELECT') updateHistoryFilters();});
   $('history-filters').addEventListener('submit',event=>event.preventDefault());
-  $('history-filters').addEventListener('reset',()=>setTimeout(()=> {historyPage=1;renderHistory();},0));
+  $('history-filters').addEventListener('reset',()=>setTimeout(()=> {historyPage=1;historySort='date-desc';renderHistory();},0));
   $('history-previous').addEventListener('click',()=> {historyPage=Math.max(1,historyPage-1);renderHistory();});
   $('history-next').addEventListener('click',()=> {historyPage+=1;renderHistory();});
   for(const prefix of ['bill','loan']) {
     const form = document.createElement('form'); form.id = `${prefix}-view-filters`; form.className = 'view-filters';
-    form.innerHTML = `${prefix === 'loan' ? '<label>Search loans / primary payer<input name="search" type="search"></label><label>Show<select name="status"><option value="all">All loans</option><option value="unpaid">Unpaid</option><option value="paid">Fully repaid</option></select></label>' : ''}<label>${prefix === 'loan' ? 'Next unpaid due from' : 'Due from'}<input name="from" type="date"></label><label>Through date (inclusive)<input name="to" type="date"></label><label>Minimum unpaid (PHP)<input name="min" class="amount-input" inputmode="decimal" type="number" min="0" step="0.01"></label><label>Maximum unpaid (PHP)<input name="max" class="amount-input" inputmode="decimal" type="number" min="0" step="0.01"></label>${prefix === 'loan' ? '<label>Sort by<select name="sort"><option value="date-asc">Due date: earliest first</option><option value="date-desc">Due date: latest first</option><option value="amount-asc">Unpaid: lowest first</option><option value="amount-desc">Unpaid: highest first</option></select></label>' : ''}<button type="reset" class="button secondary">Clear filters</button><p class="filter-error form-error" hidden role="alert"></p>`;
+    form.innerHTML = `<label>${prefix === 'loan' ? 'Next unpaid due from' : 'Due from'}<input name="from" type="date"></label><label>Through date (inclusive)<input name="to" type="date"></label><label>Minimum unpaid (PHP)<input name="min" class="amount-input" inputmode="decimal" type="number" min="0" step="0.01"></label><label>Maximum unpaid (PHP)<input name="max" class="amount-input" inputmode="decimal" type="number" min="0" step="0.01"></label><button type="reset" class="button secondary">Clear filters</button><p class="filter-error form-error" hidden role="alert"></p>`;
     $(`${prefix}-filters`).append(form);
     const update = () => {
       const f = viewFilters(prefix), message = form.querySelector('.filter-error');
@@ -178,7 +185,7 @@
     form.addEventListener('submit',event=>event.preventDefault()); form.addEventListener('input',update);
     // Text-field blur must not rebuild rows between pointer-down and click.
     form.addEventListener('change',event=> {if(event.target.tagName==='SELECT') update();});
-    form.addEventListener('reset',()=> { if(prefix==='bill') { $('search').value=''; $('status-filter').value='all'; billSort='date-asc'; } setTimeout(update,0); });
+    form.addEventListener('reset',()=> { if(prefix==='bill') { $('search').value=''; $('status-filter').value='all'; billSort='date-asc'; } else { $('loan-search').value=''; $('loan-status-filter').value='all'; loanSort='date-asc'; } setTimeout(update,0); });
   }
   function renderRecurrences() {
     $('recurrence-list').innerHTML = (data.recurrences || []).filter(r=>!r.removed).map(r=>`<div class="recurrence-item"><strong>${esc(r.title)}</strong><p class="hint">Day ${r.anchor_day} each month · ${r.active ? 'Active' : 'Cancelled'} · Primary payer: ${esc(data.members.find(m=>m.id===r.responsible_id)?.username || 'Inactive member')}</p>${data.user.admin && r.active ? `<button class="button secondary recurrence-action" data-id="${r.id}" data-action="cancel" data-online>Cancel schedule</button>` : ''}${data.user.admin && !data.bills.some(b=>b.recurrence_id===r.id && b.payments.length) ? `<button class="button secondary recurrence-action" data-id="${r.id}" data-action="remove" data-online>Remove schedule</button>` : ''}</div>`).join('') || '<p class="hint">No monthly schedules.</p>';
@@ -219,10 +226,26 @@
   });
   function renderLoans() {
     if(!data) return;
-    $('loan-cards').innerHTML = FBTFilters.filterRecords(FBTFilters.loanSummaries(data.loans, data.bills), viewFilters('loan')).map(loan => {
-      const remaining = loan.balance, paidCount = loan.paidCount;
-      return `<article class="card loan-card"><p class="eyebrow">MONTHLY REPAYMENTS</p><h2>${esc(loan.title)}</h2><div class="loan-total">${currency(remaining)}</div><p class="small muted">remaining of ${currency(loan.total)}</p><progress max="${loan.total}" value="${(Number(loan.total)-remaining).toFixed(2)}" aria-label="Loan repayment progress"></progress><p class="small muted">Next unpaid due: ${loan.due_date ? dateLabel(loan.due_date) : 'None · fully repaid'} · Primary payer: ${esc(loan.responsible)}</p><p class="small muted">${paidCount} of ${loan.installments} installments paid</p><a class="button secondary loan-view" href="#bills" data-title="${esc(loan.title)}">Review installments →</a></article>`;
-    }).join('') || '<article class="card empty"><h2>No matching loans.</h2><p>Clear the filters or add a loan schedule.</p></article>';
+    const records=FBTFilters.filterRecords(FBTFilters.loanSummaries(data.loans,data.bills),{...viewFilters('loan'),search:$('loan-search').value,status:$('loan-status-filter').value,sort:loanSort});
+    $('loan-rows').innerHTML=records.map(loan=> {
+      const progress=Number(loan.total)>0?Math.max(0,Math.min(100,(Number(loan.total)-loan.balance)/Number(loan.total)*100)):0;
+      return `<tr><td><button class="record-title loan-view" data-loan="${loan.id}">${esc(loan.title)}</button><span class="small muted">Primary payer: ${esc(loan.responsible)}</span><progress max="100" value="${progress.toFixed(2)}" aria-label="${esc(loan.title)} repayment progress"></progress><span class="small muted">${loan.paidCount} of ${loan.installments} installments paid</span></td><td data-label="Next due date">${loan.due_date?dateLabel(loan.due_date):'Fully repaid'}</td><td data-label="Agreed total">${currency(loan.total)}</td><td data-label="Amount unpaid">${currency(loan.balance)}</td><td data-label="Payment status">${badge(loan.status)}</td><td><button class="button secondary loan-view" data-loan="${loan.id}">Review installments</button></td></tr>`;
+    }).join('');
+    $('loans-empty').hidden=records.length>0;
+    updateSortHeadings('loan');
+  }
+  function showLoanDetails(id) {
+    const loan=data.loans.find(loan=>loan.id===id);
+    if(!loan) return;
+    const bills=data.bills.filter(bill=>bill.loan_id===id);
+    $('detail-dialog').close();
+    $('detail-title').textContent=loan.title;
+    $('detail-summary').textContent=`${currency(loan.total)} agreed total · ${currency(bills.reduce((sum,b)=>sum+Math.round(Number(b.balance)*100),0)/100)} unpaid · ${loan.installments} installments`;
+    $('detail-recurrence').textContent='Monthly repayment schedule';
+    $('detail-actions').replaceChildren();
+    $('detail-notes').textContent='Select an installment to review its bill and recorded payments.';
+    $('detail-payments').innerHTML=bills.map(b=>`<div class="activity"><div><button class="bill-detail" data-id="${b.id}">${esc(b.title)}</button><p>${dateLabel(b.due_date)} · Primary payer: ${esc(b.responsible)}</p><p>${currency(b.amount)} original · ${currency(b.balance)} unpaid</p></div>${badge(b.status)}</div>`).join('');
+    $('detail-dialog').showModal();
   }
   function render() {
     if (!data) return;
@@ -431,6 +454,7 @@
     const detail = event.target.closest('.bill-detail');
     if (detail) {
       const bill = data.bills.find(b => b.id === Number(detail.dataset.id));
+      $('detail-dialog').close();
       $('detail-title').textContent = bill.title;
       const parentLoan=data.loans.find(loan=>loan.id===bill.loan_id);
       $('detail-notes').textContent = (parentLoan ? `Loan: ${parentLoan.title}. ` : '') + (bill.notes || 'No notes added.');
@@ -444,7 +468,7 @@
       const bill = data.bills.find(b => b.id === Number(payment.dataset.id)), form = $('payment-form');
       form.reset(); form.elements.bill_id.value = bill.id; form.elements.amount.value = bill.balance; form.elements.amount.max = bill.balance; form.elements.paid_date.value = today(); form.elements.paid_date.max = today(); form.elements.request_key.value = crypto.randomUUID(); $('payment-title').textContent = `${bill.title} · ${currency(bill.balance)} unpaid`; openDialog('payment-dialog');
     }
-    const loan = event.target.closest('.loan-view'); if (loan) { $('search').value = loan.dataset.title; renderBills(); }
+    const loan = event.target.closest('.loan-view'); if (loan) showLoanDetails(Number(loan.dataset.loan));
   });
   submitForm('bill-form', '/api/bills/', value => ({...value,repeat_monthly: $('bill-form').elements.repeat_monthly.checked}));
   submitForm('loan-form', '/api/loans/');
@@ -452,6 +476,10 @@
   submitForm('server-form', '/api/settings/');
   submitForm('payer-form', value => `/api/bills/${value.bill_id}/payer/`);
   $('search').addEventListener('input',renderBills); $('status-filter').addEventListener('change',renderBills);
+  $('loan-search').addEventListener('input',renderLoans);
+  $('loan-status-filter').addEventListener('change',renderLoans);
+  $('refresh-loans').addEventListener('click',()=>loadSnapshot());
+  $('refresh-history').addEventListener('click',()=>loadSnapshot());
   $('check-status').addEventListener('click',health);
   $('audit-refresh').addEventListener('click',loadAudit);
   function updateAuditFilters() {

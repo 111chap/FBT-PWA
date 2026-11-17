@@ -25,7 +25,15 @@ Bills & payments shows only outstanding bills, with original amount and amount u
 
 The initial view is already sorted by earliest due date. Clicking its active Due date heading reverses that order. Equal values use record ID as the tie-breaker. Original amount means that bill's amount, including an individual loan installment rather than the whole parent loan. The outstanding view orders Part paid, Upcoming, and Overdue explicitly. Its status filter has no Paid option; fully paid records are reviewed in history. Larger sentence-case heading buttons show a hover/focus highlight and an active direction indicator.
 
-There is no Bills Sort by dropdown. On phones, labelled sorting buttons appear above the cards and use the same active state and directions. Loan cards retain their separate sort dropdown. Search and date/amount/status filters combine with the selected bill sort, which remains selected through ordinary snapshot refreshes and detail viewing. Clear filters resets the bill view to its initial earliest-first order. All changes are immediate and do not require transaction confirmation.
+There is no Bills Sort by dropdown. On phones, labelled sorting buttons appear above the cards and use the same active state and directions. Loan repayments and paid history use the same clickable-heading tables and labelled mobile sorting controls. Each screen keeps its own sort state; there are no Sort by dropdowns. Search and date/amount/status filters combine with the selected bill sort, which remains selected through ordinary snapshot refreshes and detail viewing. Clear filters resets the bill view to its initial earliest-first order. All changes are immediate and do not require transaction confirmation.
+
+## Uniform record screens
+
+Bills & payments, Loan repayments, and Paid bills history share the same table frame, larger sentence-case heading buttons, hover/focus/active styling, search toolbar, live filter grid, clear control, empty state, and mobile cards. Column labels remain specific to the records rather than showing an irrelevant unpaid balance on a fully paid record.
+
+Loan rows show the agreed total, remaining unpaid amount, next unpaid due date, aggregate payment status, primary payers, and progress. Fully repaid summaries have no next due date and sort after dated summaries in either direction. Review installments opens the complete schedule, including paid installments, and each installment opens its own recorded-payment details. These views work on saved offline snapshots without changing records.
+
+Each screen sorts independently. Clearing its filters restores that screen's default sort: earliest due for bills/loans and latest completion for history. Refresh controls fetch a new shared snapshot while preserving ordinary filter/sort choices. Loan status is Paid when fully repaid, otherwise Overdue if any unpaid installment is overdue, Part paid if repayments have started, or Upcoming.
 
 ## Shared paid-bills history
 
@@ -33,13 +41,13 @@ Fully paid bills are excluded from Bills & payments and retained in history. The
 
 History shows the original amount, total recorded payments, due date, and **Date fully paid**. That date is the latest recorded payment date on the bill; it is not the time someone entered the record. Review payments opens individual amounts/dates, their recorders, notes, primary payer, and a parent-loan reference when applicable.
 
-Primary payer and Recorded by are separate filters. A recorder is the person who entered the payment, not necessarily the person who transferred money. Filters use stable user IDs, retaining referenced inactive accounts as choices. Renamed users appear under the current name from the last fetched snapshot; payment attribution is unchanged. Search, inclusive completion-date ranges, and amount/title/date sorts update immediately. History renders 25 records per page, resets to page one when filters change, and keeps a clear empty state.
+Primary payer and Recorded by are separate filters. A recorder is the person who entered the payment, not necessarily the person who transferred money. Filters use stable user IDs, retaining referenced inactive accounts as choices. Renamed users appear under the current name from the last fetched snapshot; payment attribution is unchanged. Search, inclusive completion-date and original-amount ranges, and heading sorts update immediately. Due date and Date fully paid sort independently, as do Original amount and Total paid. History renders 25 records per page, resets to page one when filters change, and keeps a clear empty state.
 
 ## Offline, privacy, and upgrade
 
 The same sorting and history operate on an opted-in, timestamped offline snapshot. This remains read-only; reconnect and refresh to obtain newer payments or names. Older saved snapshots can use their recorded names as a fallback for history filters until refreshed. Global administrator audit history remains live-only and is separate from shared paid-bill history.
 
-This change adds payment-recorder IDs to the authenticated snapshot, but introduces no database schema migration and does not change balances or erase records. The service-worker shell advances to v10. Restart the web process after deployment to load the updated template, then refresh the browser. Existing database backup practices still apply.
+This change adds payment-recorder IDs to the authenticated snapshot, but introduces no database schema migration and does not change balances or erase records. The service-worker shell advances to v11. Restart the web process after deployment to load the updated template, then refresh the browser. Existing database backup practices still apply.
 
 History pagination limits rendered rows, not the size of the existing all-bills snapshot download. A future server-paginated snapshot strategy may be appropriate for substantially larger households/history datasets.
 
@@ -56,3 +64,7 @@ All records shown are fictional browser-test fixtures.
 ![Bill headings sort original and unpaid amounts separately](screenshots/bill-column-sort.png)
 
 ![Larger sortable headings with a hover highlight](screenshots/bill-heading-hover.png)
+
+![Loan repayments use the shared table layout](screenshots/loan-repayments-uniform.png)
+
+![Loan rows adapt to the same mobile cards](screenshots/mobile-loans-uniform.png)

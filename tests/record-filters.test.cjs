@@ -58,6 +58,23 @@ test('legacy offline snapshots can filter names before a refreshed identity snap
 test('history browsing leaves snapshot values and original order untouched',()=>{
   const before=JSON.stringify(historyBills); paidHistory(historyBills,{sort:'amount-asc'}); assert.equal(JSON.stringify(historyBills),before);
 });
+test('history headings independently sort due date, completion date and total paid',()=>{
+  const rows=[...historyBills.slice(0,2),{...historyBills[0],id:4,title:'Earlier due, later payment',due_date:'2027-01-01',payments:[{amount:'100',paid_date:'2029-01-01',recorded_by_id:1,recorded_by:'Admin'}]}];
+  assert.deepEqual(paidHistory(rows,{sort:'due-asc'}).map(b=>b.id),[4,1,2]);
+  assert.deepEqual(paidHistory(rows,{sort:'due-desc'}).map(b=>b.id),[2,1,4]);
+  assert.deepEqual(paidHistory(rows,{sort:'date-desc'}).map(b=>b.id),[4,2,1]);
+  assert.deepEqual(paidHistory(rows,{sort:'paid-desc'}).map(b=>b.id),[1,4,2]);
+  assert.deepEqual(paidHistory(rows,{min:'100',max:'100'}).map(b=>b.id),[4,1]);
+});
+test('loan rows expose agreed total and aggregate payment status without changing installments',()=>{
+  const rows=[{id:1,title:'Overdue',total:'100',installments:1},{id:2,title:'Partial',total:'200',installments:1},{id:3,title:'Upcoming',total:'50',installments:1}];
+  const installments=[{id:1,loan_id:1,balance:'75',status:'overdue',due_date:'2020-01-01',responsible:'Sam'},{id:2,loan_id:2,balance:'100',status:'partial',due_date:'2030-01-01',responsible:'Sam'},{id:3,loan_id:3,balance:'50',status:'upcoming',due_date:'2030-02-01',responsible:'Sam'}];
+  const before=JSON.stringify(installments), result=loanSummaries(rows,installments);
+  assert.deepEqual(result.map(l=>l.status),['overdue','partial','upcoming']);
+  assert.deepEqual(filterRecords(result,{sort:'original-desc'}).map(l=>l.id),[2,1,3]);
+  assert.equal(filterRecords(result,{status:'unpaid'}).length,3);
+  assert.equal(JSON.stringify(installments),before);
+});
 test('loan preview matches cent rounding and monthly anchors through leap years',()=>{
   const schedule=loanSchedule('1000',3,'2028-01-31');
   assert.deepEqual(schedule.map(p=>p.amount),['333.33','333.33','333.34']);
