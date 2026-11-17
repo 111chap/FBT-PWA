@@ -1,77 +1,85 @@
 # FBT-PWA — Family Bill Tracker
 
-A self-hosted family bill and loan repayment tracker, designed as an installable web app for Android and iPhone. The aim is to replace a shared spreadsheet with a clear view of upcoming payments, recorded payments, and reminders.
+A self-hosted family bill and loan repayment tracker for Android, iPhone, and desktop browsers. Keep due dates, manual payments, and reminders together on a family NAS.
 
-**Project stage:** planning and repository setup. The application is not implemented yet; the features and architecture below describe the intended build.
+**Stage: first working development version.** Local browser and Docker/PostgreSQL checks passed. It is not yet deployed to the family NAS or verified on physical phones. See the [verification record](docs/VERIFICATION.md).
 
-## The problem
+## What works
 
-Keeping household bills and loan installments in a spreadsheet means manually checking due dates and telling family members when something has been paid. FBT-PWA will bring those records and reminders into one shared application hosted on the family's NAS.
+- Shared family accounts, one-time administrator enrollment, and sign-in.
+- Bill creation, partial/full payment recording, payment history, and CSV export.
+- Monthly fixed-amount recurring bills and agreed loan installment schedules.
+- Dashboard and phone-sized layouts for upcoming, overdue, and paid records.
+- System status with actual database checks and worker heartbeat age.
+- First-time Synology setup guide with a local private configuration generator.
+- Opt-in, read-only offline snapshots with a saved-at timestamp and seven-day expiry.
+- A prompt to refresh after the home server becomes reachable again.
+- Web Push subscription, device test, and scheduled reminders when configured.
+- Security and payment tests, including simultaneous payments against PostgreSQL.
 
-Payments happen outside the app. Family members enter bills and record payments themselves.
+The app does not connect to banks, detect payments, or transfer money. Family members enter records manually.
 
-## Planned features
+## Try it locally
 
-- Dashboard for upcoming, overdue, and paid bills.
-- Recurring bills, including bills whose amount changes each month.
-- Loan installment schedules, partial payments, and repayment history.
-- Individual family accounts and shared payment status.
-- Configurable Web Push reminders on registered devices.
-- History showing who recorded or corrected a payment.
-- CSV export and database backup procedures.
+See [local development](docs/DEVELOPMENT.md) for the complete Windows and macOS/Linux steps. In brief: create a Python virtual environment, install `requirements.lock`, set `FBT_DEBUG=1`, create the `data` directory, migrate the database, set a development `FBT_SETUP_TOKEN`, and run `python manage.py runserver 127.0.0.1:8787` using the virtual environment.
 
-Bank integrations, automatic payment detection, and payment processing are outside the initial scope.
+A fictional preview can be created with `seed_demo`; it is explicitly disabled in production and PostgreSQL deployments. Real credentials and family data must remain outside the repository.
 
-## Proposed stack
+## Install on a NAS
 
-| Component | Proposed technology |
+Start with the [visual first-time guide](setup/index.html). Download the project and open that file in a browser, or visit `/setup-guide/` on a running instance. The guide covers:
+
+1. Installing Synology Container Manager and preparing the project folder.
+2. Generating a private `.env` file locally.
+3. Starting the Docker Compose project.
+4. Configuring a trusted HTTPS address and NAS reverse proxy.
+5. Creating family accounts and installing the app on phones.
+6. Checking component status, saving offline records, and testing reminders.
+
+The intended device is the family's Synology NAS, reported as a DS923+; confirm the model, DSM version, available memory, and home DNS before deployment. The app guides configuration; it does not install Docker or change NAS administration settings remotely.
+
+See [operations and recovery](docs/OPERATIONS.md) for deployment details, backups, and restoration.
+
+## Stack
+
+| Component | Implementation |
 | --- | --- |
-| Web interface | Django templates, HTMX, responsive CSS |
-| Backend | Python and Django |
-| Database | PostgreSQL |
-| Installable experience | PWA manifest and service worker |
-| Notifications | Web Push with `pywebpush` and VAPID |
-| Scheduling | Separate reminder worker with database-persisted schedules |
-| Deployment | Docker Compose on Synology Container Manager |
-| HTTPS | NAS reverse proxy or Caddy, depending on the access setup |
+| Application | Python 3.12 and Django 5.2 LTS |
+| Interface | Django templates, responsive CSS, self-hosted JavaScript |
+| Deployment database | PostgreSQL 17 |
+| Local preview database | SQLite |
+| Offline installation | Web manifest, service worker, IndexedDB |
+| Notifications | Web Push, pywebpush, VAPID |
+| Reminders | Separate worker with durable schedules and delivery records |
+| NAS hosting | Docker Compose and Synology Container Manager |
+| Web server | Waitress and WhiteNoise behind a trusted HTTPS reverse proxy |
 
-The intended deployment target is the family's Synology NAS, reported as a DS923+; the exact model, installed DSM version, available memory, and remote access configuration will be confirmed before deployment.
+Dependency versions are captured in `requirements.lock` for repeatable builds. No external fonts, analytics, frontend CDN, or frontend build tool is needed.
 
-## Planned architecture
+## Offline and privacy
 
-```text
-Family phones and computers
-            |
-          HTTPS
-            |
-    Django application ---- PostgreSQL
-                                  |
-                           Reminder worker
-                                  |
-                         Web Push services
-                                  |
-                            Family phones
+Saving bills offline is a per-account opt-in on each browser profile. The copy is read-only and shows its last update time. A browser with access to that profile can inspect the stored records, so only enable it on trusted, locked devices. Sign-out clears the local copy; offline sign-out also explains that server-session revocation waits for reconnection.
+
+The public service-worker cache contains only shell assets. Authenticated pages and API responses are never placed in that cache. When the home server answers again, the app prompts for an update before allowing payment changes. It checks server reachability, not your Wi-Fi network name.
+
+## Checks
+
+```sh
+python manage.py test tests
+node --test tests/offline.test.cjs
 ```
 
-On iPhone, push support requires a compatible iOS version, Home Screen installation, and notification permission. Reminders depend on NAS and internet availability; the app will also show upcoming and overdue items directly.
+Run with the environment described in [development](docs/DEVELOPMENT.md). The GitHub Actions workflow is configured to test with PostgreSQL; it has not run on GitHub until the repository is published. See [security](SECURITY.md) for implemented controls and limitations.
 
-## Documentation
+## Remaining work
 
-- [Project outline](FAMILY-BILL-TRACKER-IDEA.md)
-- [PDF overview](output/pdf/FAMILY-BILL-TRACKER-IDEA.pdf)
-- [Development roadmap](ROADMAP.md)
-
-Local setup commands and deployment instructions will be added with the working application.
-
-## Data privacy
-
-The public repository is for source code and documentation. Actual family bills, loan records, database files, device push subscriptions, credentials, and backups must remain outside version control. Future screenshots and demonstration data should use fictional records.
+Physical iPhone/Android push verification, real NAS deployment, backup restoration, configurable reminder times/recipients, bill editing and payment corrections, and further accessibility testing remain. See [roadmap](ROADMAP.md). The [original outline](FAMILY-BILL-TRACKER-IDEA.md) and [PDF overview](output/pdf/FAMILY-BILL-TRACKER-IDEA.pdf) describe the earlier planning proposal rather than current completion status.
 
 ## Author and attribution
 
 Original application idea and project ownership: **Chris Daniel Apin ([111chap](https://github.com/111chap))**.
 
-The initial technology stack proposal and supporting project information were generated by **Codex**, based on Chris's idea and requirements. Development assistance will be documented as the project progresses.
+**Codex** generated the initial technology stack proposal and supporting information, and assisted with implementation and tests based on Chris's requirements.
 
 ## License
 
