@@ -69,10 +69,13 @@ The public service-worker cache contains only shell assets. Authenticated pages 
 
 ```sh
 python manage.py test tests
-node --test tests/offline.test.cjs
+npm ci
+npm test
 ```
 
 Run with the environment described in [development](docs/DEVELOPMENT.md). [GitHub Actions](https://github.com/111chap/FBT-PWA/actions) runs these checks with PostgreSQL on pushes and pull requests. See [security](SECURITY.md) for implemented controls and limitations.
+
+See [family workflows](docs/FAMILY-WORKFLOWS.md) for review/confirmation, shared settings, monthly lifecycle, filters, payer assignment, and upgrade instructions. CI also installs Chromium and runs real-browser regression checks.
 
 ## Remaining work
 

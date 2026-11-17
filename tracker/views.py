@@ -25,6 +25,8 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 from .models import Bill, Loan, Payment, Recurrence, SiteSettings, LoginFailure, PushSubscription, WorkerHeartbeat, AuditEvent
 from .services import money, next_month, validate_server_url, validate_push_endpoint, push_ready, send_push
 from .audit import trigger_status
+from .versions import bill_version, settings_version, recurrence_version
+from .idempotency import idempotent
 
 User = get_user_model()
 
@@ -40,7 +42,7 @@ def api(view):
             return JsonResponse({'error': ' '.join(error.messages)}, status=400)
         except (ValueError, TypeError, KeyError, json.JSONDecodeError):
             return JsonResponse({'error': 'Some details are invalid. Check the form and try again.'}, status=400)
-        except (Bill.DoesNotExist, User.DoesNotExist):
+        except (Bill.DoesNotExist, Recurrence.DoesNotExist, User.DoesNotExist):
             return JsonResponse({'error': 'This record is no longer available.'}, status=404)
         except IntegrityError:
             return JsonResponse({'error': 'This record was just changed by another request. Refresh before retrying.'}, status=409)
@@ -187,7 +189,8 @@ def liveness(request):
 @require_GET
 @api
 def reachable(request):
-    return JsonResponse({'reachable': True, 'user_id': request.user.pk})
+    site = SiteSettings.objects.filter(pk=1).first() or SiteSettings()
+    return JsonResponse({'reachable': True, 'user_id': request.user.pk, 'settings_version': settings_version(site)})
 
 
 @require_GET
@@ -195,15 +198,16 @@ def reachable(request):
 def snapshot(request):
     site = SiteSettings.objects.filter(pk=1).first() or SiteSettings()
     bills = []
-    for bill in Bill.objects.select_related('responsible', 'created_by').prefetch_related('payments__recorded_by'):
+    for bill in Bill.objects.filter(removed=False).select_related('responsible', 'created_by').prefetch_related('payments__recorded_by'):
         balance = bill.balance
         state = 'paid' if balance <= 0 else 'overdue' if bill.due_date < timezone.localdate() else 'partial' if bill.paid else 'upcoming'
-        bills.append({'id': bill.pk, 'title': bill.title, 'amount': str(bill.amount), 'balance': str(balance), 'due_date': bill.due_date.isoformat(), 'category': bill.category, 'notes': bill.notes, 'responsible': bill.responsible.username, 'status': state, 'loan_id': bill.loan_id, 'recurring': bool(bill.recurrence_id), 'payments': [{'amount': str(p.amount), 'paid_date': p.paid_date.isoformat(), 'recorded_by': p.recorded_by.username} for p in bill.payments.all()]})
-    return JsonResponse({'version': 1, 'synced_at': timezone.now().isoformat(), 'today': timezone.localdate().isoformat(), 'currency': 'PHP', 'family_name': site.family_name, 'nas_name': site.nas_name, 'server_url': site.server_url, 'user': {'id': request.user.pk, 'name': request.user.username, 'admin': request.user.is_superuser}, 'members': list(User.objects.filter(is_active=True).values('id', 'username')), 'bills': bills, 'loans': [{'id': loan.pk, 'title': loan.title, 'total': str(loan.total), 'installments': loan.installments} for loan in Loan.objects.all()], 'vapid_public_key': settings.VAPID_PUBLIC_KEY if push_ready() else ''})
+        bills.append({'version': bill_version(bill), 'responsible_id': bill.responsible_id, 'recurrence_id': bill.recurrence_id, 'id': bill.pk, 'title': bill.title, 'amount': str(bill.amount), 'balance': str(balance), 'due_date': bill.due_date.isoformat(), 'category': bill.category, 'notes': bill.notes, 'responsible': bill.responsible.username, 'status': state, 'loan_id': bill.loan_id, 'recurring': bool(bill.recurrence_id), 'payments': [{'amount': str(p.amount), 'paid_date': p.paid_date.isoformat(), 'recorded_by': p.recorded_by.username} for p in bill.payments.all()]})
+    return JsonResponse({'version': 1, 'synced_at': timezone.now().isoformat(), 'today': timezone.localdate().isoformat(), 'currency': 'PHP', 'settings_version': settings_version(site), 'recurrences': [{'id': r.pk, 'title': r.title, 'anchor_day': r.anchor_day, 'active': r.active, 'removed': r.removed, 'next_due': r.next_due.isoformat(), 'responsible_id': r.responsible_id, 'version': recurrence_version(r)} for r in Recurrence.objects.all()], 'family_name': site.family_name, 'nas_name': site.nas_name, 'server_url': site.server_url, 'user': {'id': request.user.pk, 'name': request.user.username, 'admin': request.user.is_superuser}, 'members': list(User.objects.filter(is_active=True).values('id', 'username')), 'bills': bills, 'loans': [{'id': loan.pk, 'title': loan.title, 'total': str(loan.total), 'installments': loan.installments} for loan in Loan.objects.all()], 'vapid_public_key': settings.VAPID_PUBLIC_KEY if push_ready() else ''})
 
 
 @require_POST
 @api
+@idempotent
 def create_bill(request):
     data = body(request)
     amount = money(data['amount'])
@@ -237,12 +241,17 @@ def record_payment(request, bill_id):
             return JsonResponse({'error': 'This payment reference has already been used.'}, status=409)
         if amount > bill.balance:
             return JsonResponse({'error': 'This exceeds the current unpaid balance. Refresh the bill and try again.'}, status=409)
+        if bill.removed:
+            raise ValidationError('This bill was removed. Refresh your records.')
+        if data.get('expected_version') and data['expected_version'] != bill_version(bill):
+            return JsonResponse({'error': 'This bill changed after review. Refresh and review the payment again.'}, status=409)
         payment = Payment.objects.create(bill=bill, amount=amount, paid_date=paid_date, recorded_by=request.user, request_key=request_key)
     return JsonResponse({'id': payment.pk}, status=201)
 
 
 @require_POST
 @api
+@idempotent
 def create_loan(request):
     data = body(request)
     title = label(data, 'title', 100)
@@ -271,13 +280,88 @@ def update_settings(request):
     if not request.user.is_superuser:
         return JsonResponse({'error': 'Only the family administrator can change server settings.'}, status=403)
     data = body(request)
-    site, _ = SiteSettings.objects.get_or_create(pk=1)
+    SiteSettings.objects.get_or_create(pk=1)
+    site = SiteSettings.objects.select_for_update().get(pk=1)
+    if data.get('expected_version') and data['expected_version'] != settings_version(site):
+        return JsonResponse({'error': 'Workspace details changed. Refresh and review them again.'}, status=409)
     site.family_name = label(data, 'family_name', 80)
     site.nas_name = label(data, 'nas_name', 80)
     url = text(data, 'server_url', 200)
     site.server_url = validate_server_url(url) if url else ''
     site.save()
     return JsonResponse({'ok': True, 'note': 'Address saved for guidance only. DNS, certificates, and allowed hosts must be configured on the NAS.'})
+
+
+@require_POST
+@api
+def recurrence_action(request, recurrence_id):
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Only the administrator can cancel or remove repeating bills.'}, status=403)
+    data = body(request)
+    with transaction.atomic():
+        recurrence = Recurrence.objects.select_for_update().get(pk=recurrence_id)
+        current = recurrence_version(recurrence)
+        if data.get('expected_version') != current:
+            return JsonResponse({'error': 'This schedule changed. Refresh and review again.'}, status=409)
+        if data.get('action') not in ('cancel', 'remove'):
+            raise ValidationError('Choose cancel or remove.')
+        if data['action'] == 'remove':
+            bills = list(Bill.objects.select_for_update().filter(recurrence=recurrence).order_by('pk'))
+            if Payment.objects.filter(bill__in=bills).exists():
+                raise ValidationError('This schedule has payments. Cancel it instead to retain financial history.')
+            for bill in bills:
+                bill.removed = True
+                bill.save(update_fields=['removed'])
+            recurrence.removed = True
+        recurrence.active = False
+        recurrence.save(update_fields=['active', 'removed'])
+    return JsonResponse({'ok': True})
+
+
+@require_POST
+@api
+def remove_bill(request, bill_id):
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Only the administrator can remove a bill.'}, status=403)
+    data = body(request)
+    with transaction.atomic():
+        bill = Bill.objects.select_for_update().get(pk=bill_id)
+        if data.get('expected_version') != bill_version(bill):
+            return JsonResponse({'error': 'This bill changed. Refresh and review again.'}, status=409)
+        if bill.payments.exists() or bill.loan_id:
+            raise ValidationError('Bills with payments and loan installments must be retained.')
+        bill.removed = True
+        bill.save(update_fields=['removed'])
+    return JsonResponse({'ok': True})
+
+
+@require_POST
+@api
+def reassign_payer(request, bill_id):
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Only the administrator can reassign an existing bill.'}, status=403)
+    data = body(request)
+    with transaction.atomic():
+        # Same lock order as the recurrence worker / lifecycle operation.
+        target = Bill.objects.get(pk=bill_id)
+        recurrence = Recurrence.objects.select_for_update().get(pk=target.recurrence_id) if target.recurrence_id else None
+        bill = Bill.objects.select_for_update().get(pk=bill_id, removed=False)
+        if data.get('expected_version') != bill_version(bill):
+            return JsonResponse({'error': 'This bill changed. Refresh and review again.'}, status=409)
+        payer = User.objects.select_for_update().get(pk=int(data['responsible']), is_active=True)
+        scope = data.get('scope', 'current')
+        if scope not in ('current', 'future') or (scope == 'future' and not recurrence):
+            raise ValidationError('Choose a valid assignment scope.')
+        if scope == 'future':
+            if data.get('recurrence_version') != recurrence_version(recurrence):
+                return JsonResponse({'error': 'The schedule changed. Refresh and review again.'}, status=409)
+            if not recurrence.active or recurrence.removed:
+                raise ValidationError('This schedule is no longer active.')
+            recurrence.responsible = payer
+            recurrence.save(update_fields=['responsible'])
+        bill.responsible = payer
+        bill.save(update_fields=['responsible'])
+    return JsonResponse({'ok': True})
 
 
 @require_GET
@@ -309,8 +393,8 @@ def export_bills(request):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="family-bills.csv"'
     writer = csv.writer(response)
-    writer.writerow(['Bill', 'Due date', 'Amount PHP', 'Unpaid PHP', 'Responsible'])
-    for bill in Bill.objects.select_related('responsible').prefetch_related('payments'):
+    writer.writerow(['Bill', 'Due date', 'Amount PHP', 'Unpaid PHP', 'Primary payer'])
+    for bill in Bill.objects.filter(removed=False).select_related('responsible').prefetch_related('payments'):
         safe_title = "'" + bill.title if bill.title.startswith(('=', '+', '-', '@', '\t', '\r', '\n')) else bill.title
         username = bill.responsible.username
         safe_user = "'" + username if username.startswith(('=', '+', '-', '@')) else username
@@ -363,7 +447,7 @@ def audit_history(request):
     if len(search) > 150:
         raise ValidationError('Use a shorter search term.')
     if search:
-        events = events.filter(Q(label__icontains=search) | Q(actor_name__icontains=search) | Q(transaction_id__icontains=search))
+        events = events.filter(Q(label__icontains=search) | Q(actor_name__icontains=search) | Q(transaction_id__icontains=search) | Q(entity_id__iexact=search) | Q(before__icontains=search) | Q(after__icontains=search))
     choices = {
         'entity_type': {'bill', 'payment', 'loan', 'recurrence', 'settings', 'account', 'access', 'device', 'reminder', 'system'},
         'action': {'insert', 'update', 'delete', 'started'},

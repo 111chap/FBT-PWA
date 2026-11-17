@@ -27,6 +27,8 @@ class Recurrence(models.Model):
     category = models.CharField(max_length=40, default='Household')
     next_due = models.DateField()
     anchor_day = models.PositiveSmallIntegerField()
+    active = models.BooleanField(default=True)
+    removed = models.BooleanField(default=False)
     responsible = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='+')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='+')
 
@@ -37,6 +39,7 @@ class Bill(models.Model):
     due_date = models.DateField()
     category = models.CharField(max_length=40, default='Household')
     notes = models.CharField(max_length=500, blank=True)
+    removed = models.BooleanField(default=False)
     responsible = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='assigned_bills')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='created_bills')
     loan = models.ForeignKey(Loan, null=True, blank=True, on_delete=models.PROTECT, related_name='bills')
@@ -95,6 +98,13 @@ class ReminderDelivery(models.Model):
 class LoginFailure(models.Model):
     key = models.CharField(max_length=64, db_index=True)
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+
+class MutationReceipt(models.Model):
+    key = models.UUIDField(primary_key=True)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    digest = models.CharField(max_length=64)
+    result = models.JSONField()
 
 
 class AuditContext(models.Model):

@@ -20,6 +20,7 @@ jobs:
       POSTGRES_DB: fbt
       POSTGRES_USER: fbt
       POSTGRES_PASSWORD: ci-only-not-production
+      FBT_BROWSER_TESTS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,9 +30,18 @@ jobs:
         with:
           node-version: "22"
       - run: pip install -r requirements.lock
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - run: mkdir -p data
       - run: python manage.py check
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py test tests
-      - run: node --test tests/offline.test.cjs
+      - run: node --test tests/*.test.cjs
+      - run: node --check static/app.js && node --check static/admin-review.js && node --check static/review.js
       - run: python -m compileall -q config tracker
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-qa
+          path: tmp/browser-qa/
+          if-no-files-found: ignore

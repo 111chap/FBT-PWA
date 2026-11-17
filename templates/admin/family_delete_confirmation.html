@@ -1,0 +1,10 @@
+{% extends "admin/delete_confirmation.html" %}
+{% block delete_confirm %}
+<p>Delete {{ object_name }} “{{ object }}”? The following related records will also be deleted. Financial records and audit history are retained; referenced accounts cannot be deleted. Deactivate them instead.</p>
+{% include "admin/includes/object_delete_summary.html" %}
+<ul id="deleted-objects">{{ deleted_objects|unordered_list }}</ul>
+<form method="post">{% csrf_token %}<input type="hidden" name="_record_version" value="{{ record_version }}"><input type="hidden" name="post" value="yes">
+{% if is_popup %}<input type="hidden" name="{{ is_popup_var }}" value="1">{% endif %}
+{% if to_field %}<input type="hidden" name="{{ to_field_var }}" value="{{ to_field }}">{% endif %}
+<input type="submit" value="Delete {{ object_name }}"><a href="#" class="button cancel-link">Cancel / go back</a></form>
+{% endblock %}

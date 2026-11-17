@@ -1,6 +1,6 @@
 # Local development
 
-Python 3.12 and Node.js 22 or newer are suitable. PostgreSQL 17 is the deployment database; SQLite is supported only for a quick local preview. No frontend package installation is required.
+Python 3.12 and Node.js 22 or newer are suitable. PostgreSQL 17 is the deployment database; SQLite is supported only for a quick local preview. No frontend build is required. Browser tests use the development-only Playwright dependency; run `npm ci` and `npx playwright install chromium`, then set `FBT_BROWSER_TESTS=1` to include them in Django tests.
 
 ## Windows PowerShell
 
@@ -60,7 +60,7 @@ With `FBT_DEBUG=1` in a fresh shell:
 python manage.py check
 python manage.py makemigrations --check --dry-run
 python manage.py test tests
-node --test tests/offline.test.cjs
+npm test
 node --check static/app.js
 node --check static/setup.js
 ```

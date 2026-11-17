@@ -66,6 +66,8 @@ def materialize_recurring(today=None):
     for pk in Recurrence.objects.values_list('pk', flat=True):
         with transaction.atomic():
             recurrence = Recurrence.objects.select_for_update().get(pk=pk)
+            if not recurrence.active or recurrence.removed:
+                continue
             count = 0
             while recurrence.next_due <= today + timedelta(days=30) and count < 24:
                 Bill.objects.get_or_create(recurrence=recurrence, due_date=recurrence.next_due, defaults={'title': recurrence.title, 'amount': recurrence.amount, 'category': recurrence.category, 'responsible': recurrence.responsible, 'created_by': recurrence.created_by})
@@ -81,7 +83,7 @@ def deliver_reminders(now=None):
     if not push_ready() or local.hour < 9 or local.hour >= 20:
         return
     # One worker is enforced with a database lock in the worker command.
-    for bill in Bill.objects.filter(due_date__lte=local.date() + timedelta(days=3)).prefetch_related('payments'):
+    for bill in Bill.objects.filter(removed=False, due_date__lte=local.date() + timedelta(days=3)).prefetch_related('payments'):
         if bill.balance <= 0:
             continue
         for subscription in PushSubscription.objects.filter(user__is_active=True):

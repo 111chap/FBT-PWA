@@ -148,7 +148,9 @@ class AuditTests(TestCase):
             self.assertNotIn(value,serialized)
 
     def test_actual_django_admin_password_change_has_actor(self):
-        response=self.client.post(f'/admin/auth/user/{self.member.pk}/password/',{'password1':'Another-test-passphrase-123!','password2':'Another-test-passphrase-123!','usable_password':'true'})
+        url=f'/admin/auth/user/{self.member.pk}/password/'
+        token=self.client.get(url).context['record_version']
+        response=self.client.post(url,{'password1':'Another-test-passphrase-123!','password2':'Another-test-passphrase-123!','usable_password':'true','_record_version':token})
         self.assertEqual(response.status_code,302)
         event=AuditEvent.objects.get(entity_type='account',entity_id=str(self.member.pk),action='update')
         self.assertTrue(event.credentials_changed)

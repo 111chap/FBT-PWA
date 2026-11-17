@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.db import connection, connections, close_old_connections, transaction, IntegrityError
 from django.test import Client, TransactionTestCase, override_settings
 from django.utils import timezone
-from tracker.models import Bill, Payment
+from tracker.models import Bill, Payment, Loan, MutationReceipt
 
 
 @skipUnless(connection.vendor == 'postgresql', 'Row locking must be verified against PostgreSQL.')
@@ -51,3 +51,22 @@ class ConcurrentPaymentTests(TransactionTestCase):
             results = list(pool.map(pay, range(2)))
         self.assertEqual(sorted(results),['committed','rejected'])
         self.assertEqual(Payment.objects.count(),1)
+
+    def test_simultaneous_loan_retries_commit_one_schedule(self):
+        barrier=Barrier(2)
+        key=str(uuid.uuid4())
+        payload={'title':'Retry test','total':'90','installments':3,'first_due':'2028-01-31','request_key':key}
+        def create(_):
+            close_old_connections()
+            try:
+                client=Client(); client.force_login(get_user_model().objects.get(pk=self.user.pk))
+                barrier.wait(timeout=15)
+                return client.post('/api/loans/',json.dumps(payload),content_type='application/json').status_code
+            finally:
+                connections.close_all()
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results=list(pool.map(create,range(2)))
+        self.assertEqual(sorted(results),[200,201])
+        self.assertEqual(Loan.objects.count(),1)
+        self.assertEqual(Bill.objects.filter(loan__isnull=False).count(),3)
+        self.assertEqual(MutationReceipt.objects.count(),1)

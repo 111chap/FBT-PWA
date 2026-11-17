@@ -1,0 +1,124 @@
+const {chromium}=require('playwright');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const base=process.argv[2];
+async function main() {
+  const browser=await chromium.launch({headless:true,...(process.env.FBT_BROWSER_EXECUTABLE ? {executablePath:process.env.FBT_BROWSER_EXECUTABLE} : {})});
+  const context=await browser.newContext({viewport:{width:1280,height:600}});
+  const page=await context.newPage(), failures=[];
+  const contexts=[context];
+  page.on('pageerror',error=>failures.push(error.message));
+  const login=async (p,user)=>{await p.goto(base+'/login/');await p.locator('[name=username]').fill(user);await p.locator('[name=password]').fill('Fictional-QA-passphrase-123!');await p.locator('form button').click();await p.locator('#overview').waitFor({state:'visible'});};
+  const snapshot=async p=>p.evaluate(async()=>{const r=await fetch('/api/snapshot/');return r.json();});
+  try {
+    await login(page,'qa-admin');
+    // Short desktop windows with all administrator navigation links.
+    for(const size of [{width:1366,height:768},{width:1024,height:480},{width:390,height:844},{width:320,height:568}]) {
+      await page.setViewportSize(size);
+      const rect=await page.locator('#logout-mobile').boundingBox();
+      assert(rect && rect.x>=0 && rect.y>=0 && rect.x+rect.width<=size.width && rect.y+rect.height<=size.height,'Sign out must remain visible');
+      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No page-wide horizontal overflow');
+      fs.mkdirSync('tmp/browser-qa',{recursive:true});
+      await page.screenshot({path:`tmp/browser-qa/admin-${size.width}x${size.height}.png`,fullPage:true});
+    }
+    await page.setViewportSize({width:1280,height:600});
+    await page.locator('#overview .add-bill').click();
+    await page.locator('#bill-form [name=title]').fill('Review-only fictional bill');
+    await page.locator('#bill-form [name=amount]').fill('125');
+    const initial=(await snapshot(page)).bills.length;
+    await page.locator('#bill-form .primary').click();
+    await page.locator('.review-dialog').waitFor();
+    await page.screenshot({path:'tmp/browser-qa/bill-review.png'});
+    assert.equal((await snapshot(page)).bills.length,initial,'Opening review must not write');
+    assert.equal(await page.locator('.review-dialog .secondary').evaluate(el=>el===document.activeElement),true,'Cancel receives initial focus');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#bill-form [name=title]').inputValue(),'Review-only fictional bill');
+    await page.locator('#bill-form .primary').click();await page.locator('.review-dialog .secondary').click();
+    assert.equal((await snapshot(page)).bills.length,initial,'Cancel must not write');
+    await page.locator('#bill-form .primary').click();
+    await page.locator('.review-dialog .primary').click();
+    await page.locator('#bill-dialog').waitFor({state:'hidden'});
+    assert.equal((await snapshot(page)).bills.length,initial+1);
+    await page.goto(base+'/app/#bills');
+    await page.locator('.pay-bill').first().click();
+    await page.locator('#payment-form [name=amount]').fill('1');
+    await page.locator('#payment-form .primary').click();
+    assert.match(await page.locator('.review-dialog').innerText(),/Remaining after payment/);
+    await page.locator('.review-dialog .secondary').click();
+    await page.locator('#payment-dialog .close-dialog').click();
+    await page.goto(base+'/app/#setup');await page.locator('#server-form').waitFor({state:'visible'});
+    const memberContext=await browser.newContext(); contexts.push(memberContext); const member=await memberContext.newPage();
+    member.on('pageerror',error=>failures.push(error.message));
+    await login(member,'qa-member');await member.goto(base+'/app/#setup');
+    await member.locator('#shared-server').waitFor({state:'visible'});
+    await member.screenshot({path:'tmp/browser-qa/member-settings.png',fullPage:true});
+    assert.equal(await member.locator('#server-form').isVisible(),false);
+    await page.locator('#server-form [name=nas_name]').fill('QA Shared NAS');
+    await page.locator('#server-form .primary').click(); await page.locator('.review-dialog .primary').click();
+    await page.waitForFunction(()=>document.querySelector('#home-name').textContent==='QA Shared NAS');
+    // Probe runs every thirty seconds; all members must be notified before editing.
+    await member.locator('#refresh-snapshot').waitFor({state:'visible',timeout:40000});
+    await member.locator('#refresh-snapshot').click();
+    await member.waitForFunction(()=>document.querySelector('#shared-server-values').textContent.includes('QA Shared NAS'));
+    assert.match(await member.locator('#shared-server-values').innerText(),/QA Shared NAS/);
+    await member.locator('#enable-offline').click();
+    await member.waitForFunction(()=>localStorage.getItem('fbt-offline-enabled')==='yes');
+    await memberContext.setOffline(true); await member.reload();
+    await member.locator('#setup').waitFor({state:'visible'});
+    assert.match(await member.locator('#connection-badge').innerText(),/Offline/);
+    assert.equal(await member.locator('#server-form').isVisible(),false);
+    await member.goto(base+'/app/#bills');
+    await member.locator('#bills').waitFor({state:'visible'});
+    assert.equal(await member.locator('.pay-bill').first().isDisabled(),true);
+    await member.locator('#bill-view-filters [name=sort]').selectOption('amount-desc');
+    assert.match(await member.locator('#last-synced').innerText(),/Last updated/);
+    await memberContext.setOffline(false);
+    await member.locator('#refresh-snapshot').waitFor({state:'visible',timeout:40000});
+    await member.locator('#refresh-snapshot').click();
+    await member.waitForFunction(()=>document.querySelector('#notice').hidden);
+    // Online sign-out clears the saved snapshot and the session, including other tabs.
+    const second=await memberContext.newPage();second.on('pageerror',error=>failures.push(error.message));await second.goto(base+'/app/');await second.locator('#overview').waitFor({state:'visible'});
+    await member.locator('#logout-mobile').click();await member.waitForURL('**/login/');
+    await second.waitForURL('**/login/');
+    assert.equal(await member.evaluate(()=>localStorage.getItem('fbt-offline-enabled')),null);
+    const response=await member.request.get(base+'/api/snapshot/');assert.equal(response.status(),401);
+    await login(member,'qa-member');await member.goto(base+'/app/#setup');
+    await member.locator('#enable-offline').click();
+    await member.waitForFunction(()=>localStorage.getItem('fbt-offline-enabled')==='yes');
+    await memberContext.setOffline(true);await member.locator('#logout-mobile').click();
+    await member.waitForFunction(()=>localStorage.getItem('fbt-logout-pending')==='yes' && !localStorage.getItem('fbt-offline-enabled'));
+    await member.locator('#loading').waitFor({state:'visible'});
+    await memberContext.setOffline(false);await member.reload();await member.waitForURL('**/login/');
+    await memberContext.close();
+    // Django user edit and password pages share the accessible, redacted review.
+    await page.goto(base+'/admin/auth/user/');await page.locator('#result_list').getByRole('link',{name:'qa-member',exact:true}).click();
+    await page.locator('[name=first_name]').fill('Fictional');await page.locator('[name=_save]').click();
+    await page.locator('.review-dialog').waitFor(); assert.match(await page.locator('.review-dialog').innerText(),/Fictional/);
+    await page.locator('.review-dialog .secondary').click();
+    assert.equal(await page.locator('[name=first_name]').inputValue(),'Fictional');
+    await page.locator('[name=_save]').click();await page.locator('.review-dialog .primary').click();await page.waitForURL('**/admin/auth/user/');
+    await page.locator('#result_list').getByRole('link',{name:'qa-member',exact:true}).click();
+    await page.waitForURL('**/admin/auth/user/*/change/');
+    const userUrl=page.url();await page.goto(userUrl.replace(/change\/$/,'password/'));
+    await page.locator('[name=password1]').fill('Changed-Fictional-secret-456!');await page.locator('[name=password2]').fill('Changed-Fictional-secret-456!');
+    await page.locator('[name=set-password]').click();await page.locator('.review-dialog').waitFor();
+    assert(!((await page.locator('.review-dialog').innerText()).includes('Changed-Fictional-secret-456!')),'Credentials must be redacted');
+    await page.locator('.review-dialog .secondary').click();
+    await page.goto(base+'/admin/password_change/');
+    await page.locator('[name=old_password]').fill('Fictional-QA-passphrase-123!');
+    await page.locator('[name=new_password1]').fill('Changed-Fictional-admin-789!');await page.locator('[name=new_password2]').fill('Changed-Fictional-admin-789!');
+    await page.locator('#content-main input[type=submit]').click();await page.locator('.review-dialog').waitFor();
+    assert(!((await page.locator('.review-dialog').innerText()).includes('Changed-Fictional-admin-789!')));
+    await page.locator('.review-dialog .secondary').click();
+    assert.deepEqual(failures,[]);
+    console.log('Browser checks passed: review/cancel/commit, member settings propagation, responsive sign-out, offline read-only filters, reconnect, cross-tab sign-out, and admin review.');
+  } catch(error) {
+    for(const [ci,c] of contexts.entries()) for(const [pi,p] of c.pages().entries()) {
+      console.error(`QA page ${ci}/${pi}: ${p.url()}`,await p.locator('body').innerText().catch(()=>''));
+      await p.screenshot({path:`tmp/browser-qa/failure-${ci}-${pi}.png`,fullPage:true}).catch(()=>{});
+    }
+    console.error('Browser errors:',failures); throw error;
+  } finally {await context.close();await browser.close();}
+}
+main().catch(error=>{console.error(error);process.exitCode=1;});
