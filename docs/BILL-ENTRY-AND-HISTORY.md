@@ -39,7 +39,7 @@ Primary payer and Recorded by are separate filters. A recorder is the person who
 
 The same sorting and history operate on an opted-in, timestamped offline snapshot. This remains read-only; reconnect and refresh to obtain newer payments or names. Older saved snapshots can use their recorded names as a fallback for history filters until refreshed. Global administrator audit history remains live-only and is separate from shared paid-bill history.
 
-This change adds payment-recorder IDs to the authenticated snapshot, but introduces no database schema migration and does not change balances or erase records. The service-worker shell advances to v8. Restart the web process after deployment to load the updated template, then refresh the browser. Existing database backup practices still apply.
+This change adds payment-recorder IDs to the authenticated snapshot, but introduces no database schema migration and does not change balances or erase records. The service-worker shell advances to v9. Restart the web process after deployment to load the updated template, then refresh the browser. Existing database backup practices still apply.
 
 History pagination limits rendered rows, not the size of the existing all-bills snapshot download. A future server-paginated snapshot strategy may be appropriate for substantially larger households/history datasets.
 

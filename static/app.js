@@ -499,7 +499,7 @@
     if(signingOut || confirmingSignOut) return;
     confirmingSignOut = true;
     try {
-      const accepted = await FBTReview({title:'Sign out of Family Bill Tracker?', rows:[['Account',data?.user.name || 'Current account']], action:'Sign out', cancelAction:'Stay signed in', note:'Your saved offline copy will be removed from this device. If your home server is unreachable, reconnect and reload to finish signing out of the server.'});
+      const accepted = await FBTReview({title:'Confirm Sign out', action:'Sign out', cancelAction:'Cancel', variant:'signout'});
       if(accepted && !signingOut) await signOut();
     } finally { confirmingSignOut = false; }
   });

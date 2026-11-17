@@ -92,12 +92,13 @@ async function main() {
     let logoutRequests=0;
     member.on('request',request=>{if(request.method()==='POST' && request.url()===base+'/logout/') logoutRequests+=1;});
     await member.locator('#logout').click();await member.locator('.review-dialog').waitFor();
+    await member.screenshot({path:'tmp/browser-qa/signout-confirmation.png'});
     assert.equal(await member.locator('.review-dialog .secondary').evaluate(el=>el===document.activeElement),true);
     assert.equal(logoutRequests,0,'Opening sign-out review must not end the session');
     await member.keyboard.press('Escape');
     assert.equal(await member.evaluate(()=>localStorage.getItem('fbt-offline-enabled')),'yes');
     assert.equal((await member.request.get(base+'/api/snapshot/')).status(),200);
-    await member.locator('#logout').click();await member.getByRole('button',{name:'Stay signed in',exact:true}).click();
+    await member.locator('#logout').click();await member.getByRole('button',{name:'Cancel',exact:true}).click();
     assert.equal(logoutRequests,0,'Cancelling must not send a logout request');
     await member.locator('#logout').click();await member.locator('.review-dialog .primary').click();await member.waitForURL('**/login/');
     await second.waitForURL('**/login/');
