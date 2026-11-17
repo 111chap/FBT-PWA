@@ -30,7 +30,7 @@ Offline-copy consent and notification subscriptions remain specific to an accoun
 
 ## Sign out
 
-A labelled header button is visible at desktop, tablet and phone sizes. The desktop sidebar can scroll in short windows, so administrator-only links cannot push the footer out of reach. Mobile navigation can scroll horizontally without widening the page. Signing out clears the saved snapshot and private dialogs, informs other open tabs, and ends the session. When offline, local records are cleared immediately and a message explains that the server session will be revoked after reconnection and reload.
+One labelled Sign out button stays pinned in the sidebar on desktop and at the end of the bottom navigation on phones. Navigation scrolls independently so administrator-only links cannot push it out of reach. The upper-right connection indicator is the only connection status in the navigation; the sidebar tagline is removed. Signing out clears the saved snapshot and private dialogs, informs other open tabs, and ends the session. When offline, local records are cleared immediately and a message explains that the server session will be revoked after reconnection and reload.
 
 ## Monthly bills and removal
 
@@ -44,7 +44,7 @@ Removal is a retained-record operation, not physical SQL deletion. Removed rows 
 
 ## Filters
 
-Bills filter/sort by **due date** and **unpaid balance**, combined with title/category/payer search and payment status. Loan summaries use **next unpaid installment date** and **remaining balance**, with payer/title search and paid/unpaid status. Date and amount bounds are inclusive; use the same start/end for one exact date. Fully repaid loans have no next due date, sort after dated loans in both directions, and are excluded by date ranges. Equal values sort by record ID. Clear filters resets the view. Filters operate identically on saved snapshots without database writes.
+Bills filter/sort by **due date** and **unpaid balance**, combined with title/category/payer search and payment status. Loan summaries use **next unpaid installment date** and **remaining balance**, with payer/title search and paid/unpaid status. Date and amount bounds are inclusive; use the same start/end for one exact date. Fully repaid loans have no next due date, sort after dated loans in both directions, and are excluded by date ranges. Equal values sort by record ID. Clear filters resets the view. Bill and loan results update immediately as filters change, including on saved snapshots, without database writes or confirmation. Audit filters reload results automatically after a short typing delay; there is no Apply step.
 
 ## Primary payer and account history
 
@@ -54,6 +54,6 @@ Account audit snapshots now include username, first name, last name, email, acti
 
 ## Upgrade and verification
 
-Back up the database and verify restore instructions in OPERATIONS.md. Stop web and worker processes before running migration `0004_family_workflows`, then restart both. The migration preserves all existing rows and audit history, adds lifecycle flags and retry receipts, and replaces audit triggers within the migration transaction. This also handles SQLite table rebuilds. Do not edit the frozen v1/v2 trigger definitions after deployment. Check System status → Audit logging after upgrading. Cached public shells advance to v4 with the new review/filter assets; private snapshots still require a live refresh for new fields.
+Back up the database and verify restore instructions in OPERATIONS.md. Stop web and worker processes before running migration `0004_family_workflows`, then restart both. The migration preserves all existing rows and audit history, adds lifecycle flags and retry receipts, and replaces audit triggers within the migration transaction. This also handles SQLite table rebuilds. Do not edit the frozen v1/v2 trigger definitions after deployment. Check System status → Audit logging after upgrading. Cached public shells advance to v5 with the new review/filter assets; private snapshots still require a live refresh for new fields.
 
 CI runs PostgreSQL 17 transaction/security/migration checks, JavaScript filter/offline tests and real Chromium workflows on every push/PR, and attaches screenshots as a browser-qa artifact. Browser checks use fictional accounts and an isolated test database; no real family records or local credentials enter the tests. Install the development-only browser dependency with `npm ci` and `npx playwright install chromium`; set `FBT_BROWSER_TESTS=1` when running Django tests to include those checks locally.

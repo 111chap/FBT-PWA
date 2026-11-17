@@ -13,10 +13,11 @@ async function main() {
   const snapshot=async p=>p.evaluate(async()=>{const r=await fetch('/api/snapshot/');return r.json();});
   try {
     await login(page,'qa-admin');
+    assert.equal(await page.getByRole('button',{name:'Sign out',exact:true}).count(),1);
     // Short desktop windows with all administrator navigation links.
     for(const size of [{width:1366,height:768},{width:1024,height:480},{width:390,height:844},{width:320,height:568}]) {
       await page.setViewportSize(size);
-      const rect=await page.locator('#logout-mobile').boundingBox();
+      const rect=await page.locator('#logout').boundingBox();
       assert(rect && rect.x>=0 && rect.y>=0 && rect.x+rect.width<=size.width && rect.y+rect.height<=size.height,'Sign out must remain visible');
       assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No page-wide horizontal overflow');
       fs.mkdirSync('tmp/browser-qa',{recursive:true});
@@ -41,6 +42,14 @@ async function main() {
     await page.locator('#bill-dialog').waitFor({state:'hidden'});
     assert.equal((await snapshot(page)).bills.length,initial+1);
     await page.goto(base+'/app/#bills');
+    await page.locator('#search').fill('no-matching-fictional-bill');
+    await page.waitForFunction(()=>document.querySelectorAll('#bill-rows tr').length===0);
+    assert.equal(await page.locator('.review-dialog').count(),0,'Read-only filters must not ask for confirmation');
+    await page.locator('#search').fill('');
+    await page.waitForFunction(()=>document.querySelectorAll('#bill-rows tr').length===2);
+    await page.locator('#bill-view-filters [name=max]').fill('100');
+    await page.waitForFunction(()=>document.querySelectorAll('#bill-rows tr').length===1);
+    await page.locator('#bill-view-filters [name=max]').fill('');
     await page.locator('.pay-bill').first().click();
     await page.locator('#payment-form [name=amount]').fill('1');
     await page.locator('#payment-form .primary').click();
@@ -79,18 +88,24 @@ async function main() {
     await member.waitForFunction(()=>document.querySelector('#notice').hidden);
     // Online sign-out clears the saved snapshot and the session, including other tabs.
     const second=await memberContext.newPage();second.on('pageerror',error=>failures.push(error.message));await second.goto(base+'/app/');await second.locator('#overview').waitFor({state:'visible'});
-    await member.locator('#logout-mobile').click();await member.waitForURL('**/login/');
+    await member.locator('#logout').click();await member.waitForURL('**/login/');
     await second.waitForURL('**/login/');
     assert.equal(await member.evaluate(()=>localStorage.getItem('fbt-offline-enabled')),null);
     const response=await member.request.get(base+'/api/snapshot/');assert.equal(response.status(),401);
     await login(member,'qa-member');await member.goto(base+'/app/#setup');
     await member.locator('#enable-offline').click();
     await member.waitForFunction(()=>localStorage.getItem('fbt-offline-enabled')==='yes');
-    await memberContext.setOffline(true);await member.locator('#logout-mobile').click();
+    await memberContext.setOffline(true);await member.locator('#logout').click();
     await member.waitForFunction(()=>localStorage.getItem('fbt-logout-pending')==='yes' && !localStorage.getItem('fbt-offline-enabled'));
     await member.locator('#loading').waitFor({state:'visible'});
     await memberContext.setOffline(false);await member.reload();await member.waitForURL('**/login/');
     await memberContext.close();
+    await page.goto(base+'/app/#audit');await page.locator('#audit-rows tr').first().waitFor();
+    await page.locator('#audit-filters [name=search]').fill('no-matching-fictional-audit-event');
+    await page.locator('#audit-empty').waitFor({state:'visible'});
+    assert.equal(await page.locator('.review-dialog').count(),0);
+    await page.locator('#audit-filters [name=search]').fill('');
+    await page.locator('#audit-rows tr').first().waitFor();
     // Django user edit and password pages share the accessible, redacted review.
     await page.goto(base+'/admin/auth/user/');await page.locator('#result_list').getByRole('link',{name:'qa-member',exact:true}).click();
     await page.locator('[name=first_name]').fill('Fictional');await page.locator('[name=_save]').click();

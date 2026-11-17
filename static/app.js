@@ -73,9 +73,7 @@
     connected = value;
     $('connection-badge').className = 'badge ' + (value ? 'healthy' : 'warning');
     $('connection-badge').textContent = value ? '● Home server connected' : '○ Offline · read-only';
-    $('rail-status').textContent = value ? 'Connected to home' : 'Home server unavailable';
     $('home-copy').textContent = value ? 'Your home server is reachable. Your family is connected.' : 'You are viewing a saved copy. Updates need a connection to your home server.';
-    $('rail-dot').className = value ? 'connected-dot' : 'offline-dot';
     document.querySelectorAll('[data-online]').forEach(button => button.disabled = !value || pendingRefresh);
     $('server-form').querySelectorAll('input,button').forEach(input => input.disabled = !value || pendingRefresh || !data?.user.admin);
     $('export-link').hidden = !value;
@@ -119,7 +117,7 @@
       message.hidden = !invalid; message.textContent = 'Start date and minimum amount must not exceed their end / maximum.';
       if(prefix === 'bill') renderBills(); else renderLoans();
     };
-    form.addEventListener('submit',event=>event.preventDefault()); form.addEventListener('input',update);
+    form.addEventListener('submit',event=>event.preventDefault()); form.addEventListener('input',update); form.addEventListener('change',update);
     form.addEventListener('reset',()=> { if(prefix==='bill') { $('search').value=''; $('status-filter').value='all'; } setTimeout(update,0); });
   }
   function renderRecurrences() {
@@ -213,7 +211,9 @@
     if (name === 'system' && connected && !pendingRefresh) health();
     if (name === 'audit') loadAudit();
   }
+  let auditFilterTimer;
   async function loadAudit() {
+    clearTimeout(auditFilterTimer);
     const request = ++auditRequest;
     $('audit-message').hidden = true;
     if (!data?.user.admin || !connected || pendingRefresh) {
@@ -370,6 +370,16 @@
   $('search').addEventListener('input',renderBills); $('status-filter').addEventListener('change',renderBills);
   $('check-status').addEventListener('click',health);
   $('audit-refresh').addEventListener('click',loadAudit);
+  function updateAuditFilters() {
+    clearTimeout(auditFilterTimer);
+    auditRequest += 1; // Ignore responses for the previous filter while typing.
+    auditPageNumber = 1;
+    $('audit-previous').disabled = $('audit-next').disabled = true;
+    $('audit-summary').textContent = 'Updating results…';
+    auditFilterTimer = setTimeout(loadAudit,250);
+  }
+  $('audit-filters').addEventListener('input',updateAuditFilters);
+  $('audit-filters').addEventListener('change',updateAuditFilters);
   $('audit-filters').addEventListener('submit',event => { event.preventDefault(); auditPageNumber = 1; loadAudit(); });
   $('audit-reset').addEventListener('click',() => { $('audit-filters').reset(); auditTransaction = ''; auditPageNumber = 1; loadAudit(); });
   $('audit-previous').addEventListener('click',() => { auditPageNumber -= 1; loadAudit(); });
@@ -401,7 +411,6 @@
     } catch(_) { $('loading').hidden = false; $('loading').innerHTML = '<h2>Saved records removed.</h2><p>Reconnect to your home network and reload to finish signing out of the server. The existing server session may remain active until then.</p>'; }
   }
   $('logout').addEventListener('click',signOut);
-  $('logout-mobile').addEventListener('click',signOut);
   function pushSupported() { if(!isSecureContext || !('PushManager' in window) || !('serviceWorker' in navigator)) throw new Error('Notifications need supported browser features and trusted HTTPS. On iPhone, first open the Home Screen app.'); }
   $('enable-push').addEventListener('click',async () => {
     try {
