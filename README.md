@@ -69,7 +69,7 @@ python manage.py test tests
 node --test tests/offline.test.cjs
 ```
 
-Run with the environment described in [development](docs/DEVELOPMENT.md). The GitHub Actions workflow is configured to test with PostgreSQL; it has not run on GitHub until the repository is published. See [security](SECURITY.md) for implemented controls and limitations.
+Run with the environment described in [development](docs/DEVELOPMENT.md). [GitHub Actions](https://github.com/111chap/FBT-PWA/actions) runs these checks with PostgreSQL on pushes and pull requests. See [security](SECURITY.md) for implemented controls and limitations.
 
 ## Remaining work
 

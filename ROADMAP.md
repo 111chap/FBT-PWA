@@ -6,7 +6,7 @@ This roadmap describes planned work. Items are checked only when delivered and v
 
 - [x] Document the problem, intended users, scope, and proposed stack.
 - [x] Prepare a repository README and attribution.
-- [ ] Publish the repository under `111chap`.
+- [x] Publish the repository under `111chap`.
 - [ ] Confirm NAS model, DSM version, container support, and available memory.
 - [ ] Decide whether access is needed outside the home and choose an HTTPS setup.
 - [ ] Confirm family permissions, currency, timezone, reminder preferences, and loan rules.

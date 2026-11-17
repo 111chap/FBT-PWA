@@ -47,4 +47,4 @@ Screenshots of the fictional interface are saved locally under ignored `tmp/prev
 - A backup restored into a separate environment.
 - Accessibility testing with assistive technology and a broader browser matrix.
 
-GitHub Actions is configured but has not executed remotely because repository publication is still awaiting explicit public-visibility approval.
+The public repository is [111chap/FBT-PWA](https://github.com/111chap/FBT-PWA). Current remote workflow results are available in [GitHub Actions](https://github.com/111chap/FBT-PWA/actions), separately from the local verification recorded above.
