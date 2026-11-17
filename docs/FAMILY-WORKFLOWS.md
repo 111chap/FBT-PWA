@@ -10,6 +10,8 @@ Screenshots use fictional automated-test accounts and bills:
 
 ![Member view of shared server settings](screenshots/member-settings.png)
 
+Guided Utilities/Loan entry, clickable bill headings, and shared paid history are covered in [bill entry and history](BILL-ENTRY-AND-HISTORY.md).
+
 ## Review and confirm
 
 Bill and loan creation, payment recording, shared settings, primary-payer changes, and schedule cancellation/removal show a separate review before any business write. Back, Escape, and closing review preserve the draft without saving. Explicit confirmation submits the displayed values. Offline operation remains read-only.
@@ -30,7 +32,7 @@ Offline-copy consent and notification subscriptions remain specific to an accoun
 
 ## Sign out
 
-One labelled Sign out button stays pinned in the sidebar on desktop and at the end of the bottom navigation on phones. Navigation scrolls independently so administrator-only links cannot push it out of reach. The upper-right connection indicator is the only connection status in the navigation; the sidebar tagline is removed. Clicking Sign out first asks for confirmation, with Stay signed in focused by default. Cancelling or pressing Escape keeps the session and saved copy intact, even offline. Only confirming Sign out clears the saved snapshot and private dialogs, informs other open tabs, and ends the session. When offline, local records are cleared immediately and a message explains that the server session will be revoked after reconnection and reload.
+One labelled Sign out button stays pinned in the sidebar on desktop and at the end of the bottom navigation on phones. Navigation scrolls independently so administrator-only links cannot push it out of reach. The upper-right connection indicator is the only connection status in the navigation; the sidebar tagline is removed. Clicking Sign out opens a compact “Confirm Sign out” prompt, with a red Sign out button and Cancel beside it. Cancel receives initial focus. Cancelling or pressing Escape keeps the session and saved copy intact, even offline. Only confirming Sign out clears the saved snapshot and private dialogs, informs other open tabs, and ends the session. When offline, local records are cleared immediately and a message explains that the server session will be revoked after reconnection and reload.
 
 ## Monthly bills and removal
 
@@ -58,6 +60,6 @@ Account audit snapshots now include username, first name, last name, email, acti
 
 ## Upgrade and verification
 
-Back up the database and verify restore instructions in OPERATIONS.md. Stop web and worker processes before running migration `0004_family_workflows`, then restart both. The migration preserves all existing rows and audit history, adds lifecycle flags and retry receipts, and replaces audit triggers within the migration transaction. This also handles SQLite table rebuilds. Do not edit the frozen v1/v2 trigger definitions after deployment. Check System status → Audit logging after upgrading. Cached public shells advance to v6 with the new review/filter assets; private snapshots still require a live refresh for new fields.
+Back up the database and verify restore instructions in OPERATIONS.md. Stop web and worker processes before running migration `0004_family_workflows`, then restart both. The migration preserves all existing rows and audit history, adds lifecycle flags and retry receipts, and replaces audit triggers within the migration transaction. This also handles SQLite table rebuilds. Do not edit the frozen v1/v2 trigger definitions after deployment. Check System status → Audit logging after upgrading. Cached public shells advance to v11 with the new review/filter assets; private snapshots still require a live refresh for new fields.
 
 CI runs PostgreSQL 17 transaction/security/migration checks, JavaScript filter/offline tests and real Chromium workflows on every push/PR, and attaches screenshots as a browser-qa artifact. Browser checks use fictional accounts and an isolated test database; no real family records or local credentials enter the tests. Install the development-only browser dependency with `npm ci` and `npx playwright install chromium`; set `FBT_BROWSER_TESTS=1` when running Django tests to include those checks locally.

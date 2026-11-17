@@ -1,10 +1,11 @@
 /* A UI safeguard, not an authorization boundary. Never persist draft form values. */
 (() => {
   'use strict';
-  window.FBTReview = async function({title, rows, action = 'Confirm changes', cancelAction = 'Back / cancel', note = ''}) {
+  window.FBTReview = async function({title, rows = [], action = 'Confirm changes', cancelAction = 'Back / cancel', note = '', variant = 'review'}) {
     const previous = document.activeElement;
     const dialog = document.createElement('dialog');
-    dialog.className = 'review-dialog';
+    const simpleSignout = variant === 'signout';
+    dialog.className = 'review-dialog' + (simpleSignout ? ' signout-dialog' : '');
     dialog.setAttribute('aria-labelledby', 'review-title');
     const heading = document.createElement('h2'); heading.id = 'review-title'; heading.textContent = title;
     const copy = document.createElement('p'); copy.textContent = note || 'Review these details before saving. Nothing has been saved yet.';
@@ -16,7 +17,10 @@
     const buttons = document.createElement('div'); buttons.className = 'button-row';
     const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'button secondary'; cancel.textContent = cancelAction; cancel.autofocus = true;
     const confirm = document.createElement('button'); confirm.type = 'button'; confirm.className = 'button primary'; confirm.textContent = action;
-    buttons.append(cancel, confirm); dialog.append(heading, copy, list, buttons); document.body.append(dialog);
+    buttons.append(...(simpleSignout ? [confirm, cancel] : [cancel, confirm]));
+    dialog.append(heading);
+    if (!simpleSignout) dialog.append(copy, list);
+    dialog.append(buttons); document.body.append(dialog);
     return new Promise(resolve => {
       let accepted = false;
       cancel.addEventListener('click', () => dialog.close());

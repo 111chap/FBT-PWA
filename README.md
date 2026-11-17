@@ -7,7 +7,9 @@ A self-hosted family bill and loan repayment tracker for Android, iPhone, and de
 ## What works
 
 - Shared family accounts, one-time administrator enrollment, and sign-in.
-- Bill creation, partial/full payment recording, payment history, and CSV export.
+- Guided Utilities/Loan entry, live installment previews, partial/full payments, and CSV export.
+- Shared paid-bills history with payer/recorder filters and read-only offline access.
+- Clickable bill headings for alphabetical, date, original/unpaid amount, and status sorting.
 - Monthly fixed-amount recurring bills and agreed loan installment schedules.
 - Dashboard and phone-sized layouts for upcoming, overdue, and paid records.
 - System status with actual database checks and worker heartbeat age.
@@ -74,6 +76,8 @@ npm test
 ```
 
 Run with the environment described in [development](docs/DEVELOPMENT.md). [GitHub Actions](https://github.com/111chap/FBT-PWA/actions) runs these checks with PostgreSQL on pushes and pull requests. See [security](SECURITY.md) for implemented controls and limitations.
+
+See [bill entry, sorting, and paid history](docs/BILL-ENTRY-AND-HISTORY.md) for the guided entry and shared history screens.
 
 See [family workflows](docs/FAMILY-WORKFLOWS.md) for review/confirmation, shared settings, monthly lifecycle, filters, payer assignment, and upgrade instructions. CI also installs Chromium and runs real-browser regression checks.
 

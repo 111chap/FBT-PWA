@@ -25,6 +25,7 @@ async function main() {
     }
     await page.setViewportSize({width:1280,height:600});
     await page.locator('#overview .add-bill').click();
+    await page.locator('[data-bill-type=utilities]').click();
     await page.locator('#bill-form [name=title]').fill('Review-only fictional bill');
     await page.locator('#bill-form [name=amount]').fill('125');
     const initial=(await snapshot(page)).bills.length;
@@ -80,7 +81,7 @@ async function main() {
     await member.goto(base+'/app/#bills');
     await member.locator('#bills').waitFor({state:'visible'});
     assert.equal(await member.locator('.pay-bill').first().isDisabled(),true);
-    await member.locator('#bill-view-filters [name=sort]').selectOption('amount-desc');
+    await member.locator('#bills .sort-heading[data-sort=amount]').click();
     assert.match(await member.locator('#last-synced').innerText(),/Last updated/);
     await memberContext.setOffline(false);
     await member.locator('#refresh-snapshot').waitFor({state:'visible',timeout:40000});
@@ -91,12 +92,13 @@ async function main() {
     let logoutRequests=0;
     member.on('request',request=>{if(request.method()==='POST' && request.url()===base+'/logout/') logoutRequests+=1;});
     await member.locator('#logout').click();await member.locator('.review-dialog').waitFor();
+    await member.screenshot({path:'tmp/browser-qa/signout-confirmation.png'});
     assert.equal(await member.locator('.review-dialog .secondary').evaluate(el=>el===document.activeElement),true);
     assert.equal(logoutRequests,0,'Opening sign-out review must not end the session');
     await member.keyboard.press('Escape');
     assert.equal(await member.evaluate(()=>localStorage.getItem('fbt-offline-enabled')),'yes');
     assert.equal((await member.request.get(base+'/api/snapshot/')).status(),200);
-    await member.locator('#logout').click();await member.getByRole('button',{name:'Stay signed in',exact:true}).click();
+    await member.locator('#logout').click();await member.getByRole('button',{name:'Cancel',exact:true}).click();
     assert.equal(logoutRequests,0,'Cancelling must not send a logout request');
     await member.locator('#logout').click();await member.locator('.review-dialog .primary').click();await member.waitForURL('**/login/');
     await second.waitForURL('**/login/');
