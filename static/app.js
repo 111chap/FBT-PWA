@@ -7,9 +7,13 @@
   let auditEvents = [], auditPageNumber = 1, auditTransaction = '', selectedAudit = null, auditRequest = 0;
   let billSort='date-asc', loanSort='date-asc', historySort='date-desc', historyPage=1;
   const historyPageSize=25;
+  let billPage=1,loanPage=1;
+  const listPageSize=25;
   let offlineEnabled = localStorage.getItem('fbt-offline-enabled') === 'yes';
-  const currency = value => new Intl.NumberFormat('en-PH', {style:'currency', currency:'PHP'}).format(Number(value));
-  const dateLabel = value => new Date(value + 'T12:00:00').toLocaleDateString('en-PH', {month:'short', day:'numeric', year:'numeric'});
+  const currencyFormatter=new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP'});
+  const dayFormatter=new Intl.DateTimeFormat('en-PH',{month:'short',day:'numeric',year:'numeric'});
+  const currency=value=>currencyFormatter.format(Number(value));
+  const dateLabel = value => dayFormatter.format(new Date(value+'T12:00:00'));
   const stamp = value => new Date(value).toLocaleString('en-PH', {dateStyle:'medium', timeStyle:'short'});
   const auditStamp = value => new Date(value).toLocaleString('en-PH', {dateStyle:'medium', timeStyle:'medium', timeZone:'Asia/Manila'}) + ' PHT';
   const today = () => new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Manila', year:'numeric', month:'2-digit', day:'2-digit'}).format(new Date());
@@ -73,6 +77,7 @@
   }
   function setConnection(value) {
     connected = value;
+    if(data)FBTProfile.update(data,connected);
     $('connection-badge').className = 'badge ' + (value ? 'healthy' : 'warning');
     $('connection-badge').textContent = value ? '● Home server connected' : '○ Offline · read-only';
     $('home-copy').textContent = value ? 'Your home server is reachable. Your family is connected.' : 'You are viewing a saved copy. Updates need a connection to your home server.';
@@ -98,14 +103,27 @@
   function row(bill) {
     return `<tr><td><button class="bill-detail" data-id="${bill.id}">${esc(bill.title)}</button><span class="small muted">${esc(bill.category)} · Primary payer: ${esc(bill.responsible)}${bill.recurring ? ' · Monthly' : ''}</span></td><td data-label="Due date">${dateLabel(bill.due_date)}</td><td data-label="Original amount">${currency(bill.amount)}</td><td data-label="Amount unpaid">${currency(bill.balance)}</td><td data-label="Payment status">${badge(bill.status)}</td><td>${Number(bill.balance) > 0 ? `<button class="button secondary pay-bill" data-id="${bill.id}" data-online ${!connected || pendingRefresh ? 'disabled' : ''}>Record payment</button>` : '✓ Complete'}</td></tr>`;
   }
-  function renderBills() {
+  function renderBills(keepPage=false) {
+    if(keepPage!==true)billPage=1;
     if (!data) return;
     const search = $('search').value.toLowerCase();
     const filter = $('status-filter').value;
     const bills = FBTFilters.filterRecords(data.bills.filter(b=>Number(b.balance)>0), {...viewFilters('bill'), search, status:filter, sort:billSort});
-    $('bill-rows').innerHTML = bills.map(row).join('');
+    billPage=pageControls('bill',billPage,bills.length);
+    $('bill-rows').innerHTML=bills.slice((billPage-1)*listPageSize,billPage*listPageSize).map(row).join('');
     $('bills-empty').hidden = bills.length > 0;
     updateSortHeadings();
+  }
+  function pageControls(prefix,page,total){
+    const pages=Math.max(1,Math.ceil(total/listPageSize));page=Math.min(page,pages);
+    $(`${prefix}-page`).textContent=`Page ${page} of ${pages} · ${total} records`;
+    $(`${prefix}-previous`).disabled=page<=1;$(`${prefix}-next`).disabled=page>=pages;
+    return page;
+  }
+  for(const prefix of ['bill','loan']){
+    for(const [direction,step] of [['previous',-1],['next',1]])$(`${prefix}-${direction}`).addEventListener('click',()=>{
+      if(prefix==='bill'){billPage=Math.max(1,billPage+step);renderBills(true);}else{loanPage=Math.max(1,loanPage+step);renderLoans(true);}
+    });
   }
   function viewFilters(prefix) {
     return Object.fromEntries(new FormData($(`${prefix}-view-filters`)));
@@ -224,10 +242,12 @@
     } catch(exception) { error(exception.message); toast(exception.message); }
     finally { control.disabled = !connected || pendingRefresh; }
   });
-  function renderLoans() {
+  function renderLoans(keepPage=false) {
+    if(keepPage!==true)loanPage=1;
     if(!data) return;
     const records=FBTFilters.filterRecords(FBTFilters.loanSummaries(data.loans,data.bills),{...viewFilters('loan'),search:$('loan-search').value,status:$('loan-status-filter').value,sort:loanSort});
-    $('loan-rows').innerHTML=records.map(loan=> {
+    loanPage=pageControls('loan',loanPage,records.length);
+    $('loan-rows').innerHTML=records.slice((loanPage-1)*listPageSize,loanPage*listPageSize).map(loan=> {
       const progress=Number(loan.total)>0?Math.max(0,Math.min(100,(Number(loan.total)-loan.balance)/Number(loan.total)*100)):0;
       return `<tr><td><button class="record-title loan-view" data-loan="${loan.id}">${esc(loan.title)}</button><span class="small muted">Primary payer: ${esc(loan.responsible)}</span><progress max="100" value="${progress.toFixed(2)}" aria-label="${esc(loan.title)} repayment progress"></progress><span class="small muted">${loan.paidCount} of ${loan.installments} installments paid</span></td><td data-label="Next due date">${loan.due_date?dateLabel(loan.due_date):'Fully repaid'}</td><td data-label="Agreed total">${currency(loan.total)}</td><td data-label="Amount unpaid">${currency(loan.balance)}</td><td data-label="Payment status">${badge(loan.status)}</td><td><button class="button secondary loan-view" data-loan="${loan.id}">Review installments</button></td></tr>`;
     }).join('');
@@ -254,6 +274,7 @@
     $('today-label').textContent = new Date().toLocaleDateString('en-PH', {weekday:'long', month:'long', day:'numeric', year:'numeric'});
     $('user-avatar').textContent = data.user.name.slice(0,2).toUpperCase();
     $('user-avatar').title = data.user.name;
+    FBTProfile.update(data,connected);
     $('home-name').textContent = data.nas_name;
     $('last-synced').textContent = `Last updated ${stamp(data.synced_at)}`;
     const unpaid = data.bills.filter(b => Number(b.balance) > 0);
@@ -269,7 +290,6 @@
     $('upcoming-list').innerHTML = unpaid.slice(0,5).map(b => `<div class="bill-item"><span class="category-icon" aria-hidden="true">${b.loan_id ? '↗' : '▤'}</span><div class="bill-info"><strong>${esc(b.title)}</strong><p>${dateLabel(b.due_date)} · Primary payer: ${esc(b.responsible)}</p></div><div class="bill-amount"><strong>${currency(b.balance)}</strong><div>${badge(b.status)}</div></div></div>`).join('') || '<div class="empty"><h3>Nothing on the list just yet.</h3><p>Add your first bill, or enjoy being all caught up.</p></div>';
     const activity = data.bills.flatMap(b => b.payments.map(p => ({...p, title:b.title}))).sort((a,b) => b.paid_date.localeCompare(a.paid_date)).slice(0,4);
     $('activity-list').innerHTML = activity.map(p => `<div class="activity"><div><strong>${esc(p.title)}</strong><p>Recorded by ${esc(p.recorded_by)} · ${dateLabel(p.paid_date)}</p></div><strong>${currency(p.amount)}</strong></div>`).join('') || '<p class="small muted">Payments recorded by your family will appear here.</p>';
-    renderLoans();
     document.querySelectorAll('select.members').forEach(select => { const previous = select.value; select.innerHTML = data.members.map(member => `<option value="${member.id}">${esc(member.username)}</option>`).join(''); select.value = previous || data.user.id; });
     for (const name of ['family_name','nas_name','server_url']) $('server-form').elements[name].value = data[name] || '';
     $('server-form').querySelectorAll('input,button').forEach(input => input.disabled = !data.user.admin || !connected || pendingRefresh);
@@ -283,12 +303,15 @@
     $('admin-link').hidden = !data.user.admin;
     $('audit-nav').hidden = !data.user.admin;
     $('offline-setting').textContent = offlineEnabled ? `Enabled on this device. Saved copies expire after seven days. Last fetched ${stamp(data.synced_at)}.` : 'Offline viewing is off. Enable it on a trusted device while connected.';
-    renderBills(); renderHistoryMembers(); renderHistory(); route();
+    renderHistoryMembers(); route();
   }
   function route() {
     const name = ['overview','bills','loans','history','system','setup','audit'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'overview';
     document.querySelectorAll('.page').forEach(section => section.hidden = !data || section.id !== name);
     document.querySelectorAll('[data-nav]').forEach(link => { link.classList.toggle('active',link.dataset.nav === name); if(link.dataset.nav === name) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current'); });
+    if(name==='bills')renderBills();
+    if(name==='loans')renderLoans();
+    if(name==='history')renderHistory();
     if (name === 'system' && connected && !pendingRefresh) health();
     if (name === 'audit') loadAudit();
   }

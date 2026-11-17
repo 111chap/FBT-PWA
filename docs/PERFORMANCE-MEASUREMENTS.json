@@ -1,0 +1,41 @@
+{
+  "fixture": "2000 fictional bills, 1000 payments, 1 loan; local SQLite and installed Chrome",
+  "before": {
+    "browser": {
+      "readyMs": 1923.7000000029802,
+      "snapshotMs": 384.19999999925494,
+      "renderedRows": 1000,
+      "filterMedianMs": 175.89999999850988,
+      "filterWorstMs": 290.5,
+      "historyNavigationMs": 231,
+      "historyRows": 25
+    },
+    "server": {
+      "bills": 2000,
+      "payments": 1000,
+      "snapshotQueries": 9,
+      "snapshotBytes": 822056,
+      "serverMs": 401.83,
+      "database": "sqlite"
+    }
+  },
+  "after": {
+    "browser": {
+      "readyMs": 1372.2999999970198,
+      "snapshotMs": 330.69999999925494,
+      "renderedRows": 0,
+      "filterMedianMs": 1,
+      "filterWorstMs": 1.7999999970197678,
+      "historyNavigationMs": 38,
+      "historyRows": 25
+    },
+    "server": {
+      "bills": 2000,
+      "payments": 1000,
+      "snapshotQueries": 9,
+      "snapshotBytes": 825338,
+      "serverMs": 282.31,
+      "database": "sqlite"
+    }
+  }
+}
