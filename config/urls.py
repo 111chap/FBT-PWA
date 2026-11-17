@@ -14,4 +14,7 @@ urlpatterns = [
     path('api/settings/', views.update_settings), path('api/export/', views.export_bills),
     path('api/push/', views.push_subscription), path('api/push/test/', views.test_push),
     path('api/audit/', views.audit_history),
+    path('api/recurrences/<int:recurrence_id>/action/', views.recurrence_action),
+    path('api/bills/<int:bill_id>/remove/', views.remove_bill),
+    path('api/bills/<int:bill_id>/payer/', views.reassign_payer),
 ]
