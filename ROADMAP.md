@@ -25,6 +25,7 @@ This roadmap describes planned work. Items are checked only when delivered and v
 - [ ] Add bill editing and auditable payment corrections.
 - [x] Build the upcoming and overdue dashboard.
 - [x] Test money handling, permissions, payment status calculations, and concurrent payments.
+- [x] Add database-triggered audit history, administrator review, safe before/after snapshots, and rollback tests.
 
 ## 4. Recurring bills and loans
 

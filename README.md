@@ -16,6 +16,7 @@ A self-hosted family bill and loan repayment tracker for Android, iPhone, and de
 - A prompt to refresh after the home server becomes reachable again.
 - Web Push subscription, device test, and scheduled reminders when configured.
 - Security and payment tests, including simultaneous payments against PostgreSQL.
+- Administrator audit review with database-triggered history, safe before/after snapshots, and grouped transaction references.
 
 The app does not connect to banks, detect payments, or transfer money. Family members enter records manually.
 
@@ -39,6 +40,8 @@ Start with the [visual first-time guide](setup/index.html). Download the project
 The intended device is the family's Synology NAS, reported as a DS923+; confirm the model, DSM version, available memory, and home DNS before deployment. The app guides configuration; it does not install Docker or change NAS administration settings remotely.
 
 See [operations and recovery](docs/OPERATIONS.md) for deployment details, backups, and restoration.
+
+See [audit history and atomicity](docs/AUDIT.md) for log coverage, rollback guarantees, and how to review changes.
 
 ## Stack
 

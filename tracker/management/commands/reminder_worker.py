@@ -5,6 +5,7 @@ from django.db import connection, transaction, close_old_connections
 from django.utils import timezone
 from tracker.models import WorkerHeartbeat, LoginFailure
 from tracker.services import materialize_recurring, deliver_reminders
+from tracker.audit import audit_transaction
 
 
 class Command(BaseCommand):
@@ -17,7 +18,7 @@ class Command(BaseCommand):
         while True:
             try:
                 WorkerHeartbeat.objects.get_or_create(name='reminders')
-                with transaction.atomic():
+                with audit_transaction(source='worker'):
                     # The lock prevents two deployed workers from scheduling concurrently.
                     WorkerHeartbeat.objects.select_for_update().get(name='reminders')
                     materialize_recurring()

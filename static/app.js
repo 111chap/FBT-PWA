@@ -4,10 +4,12 @@
   const $ = id => document.getElementById(id);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
   let data = null, connected = false, pendingRefresh = false, checking = false, signingOut = false;
+  let auditEvents = [], auditPageNumber = 1, auditTransaction = '', selectedAudit = null, auditRequest = 0;
   let offlineEnabled = localStorage.getItem('fbt-offline-enabled') === 'yes';
   const currency = value => new Intl.NumberFormat('en-PH', {style:'currency', currency:'PHP'}).format(Number(value));
   const dateLabel = value => new Date(value + 'T12:00:00').toLocaleDateString('en-PH', {month:'short', day:'numeric', year:'numeric'});
   const stamp = value => new Date(value).toLocaleString('en-PH', {dateStyle:'medium', timeStyle:'short'});
+  const auditStamp = value => new Date(value).toLocaleString('en-PH', {dateStyle:'medium', timeStyle:'medium', timeZone:'Asia/Manila'}) + ' PHT';
   const today = () => new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Manila', year:'numeric', month:'2-digit', day:'2-digit'}).format(new Date());
   const csrf = () => document.cookie.split('; ').find(v => v.startsWith('csrftoken='))?.split('=')[1] || '';
   const badge = state => `<span class="badge ${esc(state)}">${esc({paid:'Paid',overdue:'Overdue',partial:'Part paid',upcoming:'Upcoming',healthy:'Running',warning:'Needs attention',configured:'Configured',manual:'Check manually',error:'Not healthy'}[state] || state)}</span>`;
@@ -81,6 +83,12 @@
     $('notice-copy').textContent = pendingRefresh ? 'Your home server is reachable again. Update this view before recording payments.' : data ? `Saved for ${data.user.name} on ${stamp(data.synced_at)}. Payments and amounts may have changed. Join your home network to update.` : 'Connect to your home server to load your family records.';
     $('refresh-snapshot').hidden = !pendingRefresh;
     if (!value) {
+      auditRequest += 1;
+      auditEvents = [];
+      $('audit-rows').replaceChildren();
+      $('audit-summary').textContent = 'Live audit history is unavailable while disconnected.';
+      $('audit-previous').disabled = $('audit-next').disabled = true;
+      $('audit-dialog').close();
       $('status-checked').textContent = 'Live status unavailable while the home server is out of reach.';
       $('health-cards').innerHTML = '<article class="card"><h2>Connection unavailable</h2><p class="muted">Component status cannot be checked offline. Reconnect, update your bills, then run a fresh status check.</p></article>';
     }
@@ -129,14 +137,70 @@
     $('server-form').querySelectorAll('input,button').forEach(input => input.disabled = !data.user.admin || !connected || pendingRefresh);
     $('admin-note').textContent = data.user.admin ? 'Administrator settings. Saving does not change deployment configuration.' : 'Ask your family administrator to change these settings.';
     $('admin-link').hidden = !data.user.admin;
+    $('audit-nav').hidden = !data.user.admin;
     $('offline-setting').textContent = offlineEnabled ? `Enabled on this device. Saved copies expire after seven days. Last fetched ${stamp(data.synced_at)}.` : 'Offline viewing is off. Enable it on a trusted device while connected.';
     renderBills(); route();
   }
   function route() {
-    const name = ['overview','bills','loans','system','setup'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'overview';
+    const name = ['overview','bills','loans','system','setup','audit'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'overview';
     document.querySelectorAll('.page').forEach(section => section.hidden = !data || section.id !== name);
     document.querySelectorAll('[data-nav]').forEach(link => { link.classList.toggle('active',link.dataset.nav === name); if(link.dataset.nav === name) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current'); });
     if (name === 'system' && connected && !pendingRefresh) health();
+    if (name === 'audit') loadAudit();
+  }
+  async function loadAudit() {
+    const request = ++auditRequest;
+    $('audit-message').hidden = true;
+    if (!data?.user.admin || !connected || pendingRefresh) {
+      auditEvents = [];
+      $('audit-rows').replaceChildren();
+      $('audit-summary').textContent = !data?.user.admin ? 'Only the family administrator can review the full audit history.' : 'Connect and update your bills before reviewing live audit history.';
+      return;
+    }
+    const filters = new URLSearchParams(new FormData($('audit-filters')));
+    filters.set('page',String(auditPageNumber));
+    if (auditTransaction) filters.set('transaction',auditTransaction);
+    $('audit-summary').textContent = 'Checking committed changes…';
+    try {
+      const result = await api('/api/audit/?'+filters.toString());
+      if (request !== auditRequest || !connected) return;
+      auditEvents = result.events;
+      auditPageNumber = result.page;
+      $('audit-rows').innerHTML = result.events.map(event => `<tr><td><strong>${esc(auditStamp(event.occurred_at))}</strong><span class="small muted">${esc(event.actor_name)} · ${esc(event.source)}</span></td><td>${auditAction(event.action)}</td><td><strong>${esc(event.label)}</strong><span class="small muted">${esc(event.entity_type)} #${esc(event.entity_id)}</span></td><td><button class="audit-transaction text-button" data-reference="${esc(event.transaction_id)}" title="Show all changes in this transaction">${esc(event.transaction_id.slice(0,12))}…</button></td><td><button class="audit-review button secondary" data-event="${event.id}">Review</button></td></tr>`).join('');
+      $('audit-empty').hidden = result.events.length > 0;
+      $('audit-summary').textContent = `${result.total} matching committed change${result.total === 1 ? '' : 's'}${auditTransaction ? ' · One transaction selected' : ''}`;
+      $('audit-page').textContent = `Page ${result.page} of ${result.pages}`;
+      $('audit-previous').disabled = !result.has_previous;
+      $('audit-next').disabled = !result.has_next;
+      $('audit-clear-transaction').hidden = !auditTransaction;
+      $('audit-started').textContent = result.logging_started_at ? `Logging started ${auditStamp(result.logging_started_at)}. Earlier records are not retrospectively attributed.` : 'No logging-start marker is available.';
+    } catch (exception) {
+      if (request !== auditRequest) return;
+      auditEvents = [];
+      $('audit-rows').replaceChildren();
+      $('audit-message').textContent = exception.message;
+      $('audit-message').hidden = false;
+      $('audit-summary').textContent = 'Audit history could not be checked.';
+      $('audit-previous').disabled = $('audit-next').disabled = true;
+    }
+  }
+  function auditAction(action) {
+    const style = {insert:'healthy',update:'configured',delete:'error',started:'manual'}[action] || 'manual';
+    const title = {insert:'Created',update:'Updated',delete:'Deleted',started:'Logging started'}[action] || action;
+    return `<span class="badge ${style}">${esc(title)}</span>`;
+  }
+  function reviewAudit(event) {
+    selectedAudit = event;
+    $('audit-detail-title').textContent = event.label;
+    $('audit-detail-meta').textContent = `${auditStamp(event.occurred_at)} · ${event.actor_name} · ${event.source} · ${event.action}`;
+    $('audit-credentials-note').hidden = !event.credentials_changed;
+    const before = event.before || {}, after = event.after || {};
+    const fields = [...new Set([...Object.keys(before),...Object.keys(after)])];
+    const value = item => item === null || item === undefined ? '—' : typeof item === 'object' ? JSON.stringify(item) : String(item);
+    const titles = {amount:'Amount (PHP)',total:'Total (PHP)',bill_id:'Bill ID',paid_date:'Payment date',due_date:'Due date',recorded_by_id:'Recorded by (user ID)',responsible_id:'Responsible person (user ID)',created_by_id:'Created by (user ID)',is_active:'Account active',is_staff:'Staff access',is_superuser:'Administrator access'};
+    $('audit-diff-rows').innerHTML = fields.map(field => `<tr class="${JSON.stringify(before[field]) !== JSON.stringify(after[field]) ? 'field-changed' : ''}"><th scope="row">${esc(titles[field] || field.replace(/_/g,' '))}</th><td>${esc(value(before[field]))}</td><td>${esc(value(after[field]))}</td></tr>`).join('');
+    $('audit-detail-reference').textContent = `Transaction ${event.transaction_id} · ${event.entity_table} #${event.entity_id} · Event #${event.id}`;
+    $('audit-dialog').showModal();
   }
   async function health() {
     if (!connected || pendingRefresh) return;
@@ -176,6 +240,13 @@
   $('add-loan').addEventListener('click', () => { $('loan-form').reset(); $('loan-form').elements.first_due.value = today(); openDialog('loan-dialog'); });
   document.querySelectorAll('.close-dialog').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
   document.addEventListener('click', event => {
+    const auditReview = event.target.closest('.audit-review');
+    if (auditReview) {
+      const entry = auditEvents.find(item => item.id === Number(auditReview.dataset.event));
+      if (entry) reviewAudit(entry);
+    }
+    const auditGroup = event.target.closest('.audit-transaction');
+    if (auditGroup) { auditTransaction = auditGroup.dataset.reference; auditPageNumber = 1; loadAudit(); }
     const detail = event.target.closest('.bill-detail');
     if (detail) {
       const bill = data.bills.find(b => b.id === Number(detail.dataset.id));
@@ -198,6 +269,13 @@
   $('server-form').addEventListener('submit', async event => { event.preventDefault(); try { const result = await api('/api/settings/',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(event.target)))}); await loadSnapshot(); toast(result.note); } catch(exception) { error(exception.message); } });
   $('search').addEventListener('input',renderBills); $('status-filter').addEventListener('change',renderBills);
   $('check-status').addEventListener('click',health);
+  $('audit-refresh').addEventListener('click',loadAudit);
+  $('audit-filters').addEventListener('submit',event => { event.preventDefault(); auditPageNumber = 1; loadAudit(); });
+  $('audit-reset').addEventListener('click',() => { $('audit-filters').reset(); auditTransaction = ''; auditPageNumber = 1; loadAudit(); });
+  $('audit-previous').addEventListener('click',() => { auditPageNumber -= 1; loadAudit(); });
+  $('audit-next').addEventListener('click',() => { auditPageNumber += 1; loadAudit(); });
+  $('audit-clear-transaction').addEventListener('click',() => { auditTransaction = ''; auditPageNumber = 1; loadAudit(); });
+  $('audit-related').addEventListener('click',() => { if(selectedAudit) { auditTransaction = selectedAudit.transaction_id; auditPageNumber = 1; $('audit-dialog').close(); loadAudit(); } });
   $('refresh-online').addEventListener('click',() => loadSnapshot());
   $('refresh-snapshot').addEventListener('click',async () => { $('refresh-snapshot').disabled = true; await loadSnapshot(); $('refresh-snapshot').disabled = false; });
   $('enable-offline').addEventListener('click',async () => {

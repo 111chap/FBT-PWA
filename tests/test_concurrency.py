@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 from unittest import skipUnless
 from django.contrib.auth import get_user_model
-from django.db import connection, connections, close_old_connections
+from django.db import connection, connections, close_old_connections, transaction, IntegrityError
 from django.test import Client, TransactionTestCase, override_settings
 from django.utils import timezone
 from tracker.models import Bill, Payment
@@ -31,4 +31,23 @@ class ConcurrentPaymentTests(TransactionTestCase):
         with ThreadPoolExecutor(max_workers=2) as pool:
             results = list(pool.map(pay, range(2)))
         self.assertEqual(sorted(results),[201,409])
+        self.assertEqual(Payment.objects.count(),1)
+
+    def test_database_trigger_prevents_concurrent_non_api_overpayment(self):
+        barrier = Barrier(2)
+        def pay(_):
+            close_old_connections()
+            try:
+                barrier.wait(timeout=15)
+                try:
+                    with transaction.atomic():
+                        Payment.objects.create(bill_id=self.bill.pk,amount='800.00',paid_date=timezone.localdate(),recorded_by_id=self.user.pk,request_key=uuid.uuid4())
+                    return 'committed'
+                except IntegrityError:
+                    return 'rejected'
+            finally:
+                connections.close_all()
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(pay, range(2)))
+        self.assertEqual(sorted(results),['committed','rejected'])
         self.assertEqual(Payment.objects.count(),1)

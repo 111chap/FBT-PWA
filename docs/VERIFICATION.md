@@ -48,3 +48,13 @@ Screenshots of the fictional interface are saved locally under ignored `tmp/prev
 - Accessibility testing with assistive technology and a broader browser matrix.
 
 The public repository is [111chap/FBT-PWA](https://github.com/111chap/FBT-PWA). Current remote workflow results are available in [GitHub Actions](https://github.com/111chap/FBT-PWA/actions), separately from the local verification recorded above.
+
+## Audit update verification
+
+The transaction-audit update passed **62 backend tests against PostgreSQL in Docker**, plus the five existing Node offline checks. SQLite audit tests also passed, including the additional read-only snapshot regression check.
+
+Additional coverage includes same-transaction event creation, fault-injected audit-storage failure, a loan failing midway through installment creation, nested savepoint rollback, raw SQL audit capture, raw/concurrent overpayment prevention, safe password-change flags, actual Django admin attribution, group memberships, read-only audit access, date/search/transaction filters, and missing/disabled trigger detection.
+
+The local QA database was backed up before migrations 0002 and 0003. Existing records and account credentials were preserved. The review screen was checked on phone and desktop layouts, including before/after highlights, transaction grouping, date/type filters, and reset controls. A reversible NAS display-label change and restoration produced two correctly attributed `admin` entries, with no net change to settings. System status reported the audit and balance triggers installed.
+
+Audit logging starts at its migration marker; older records are not given invented historical events. Audit review remains online-only and is excluded from offline snapshots. The QA app and worker remain running; the isolated Docker verification services are stopped after testing.

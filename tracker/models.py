@@ -1,5 +1,6 @@
 from decimal import Decimal
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
@@ -94,3 +95,49 @@ class ReminderDelivery(models.Model):
 class LoginFailure(models.Model):
     key = models.CharField(max_length=64, db_index=True)
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+
+class AuditContext(models.Model):
+    """SQLite transaction context; written and cleared within the same write transaction."""
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    actor_id = models.BigIntegerField(null=True)
+    actor_name = models.CharField(max_length=150, blank=True)
+    transaction_id = models.CharField(max_length=64, blank=True)
+    source = models.CharField(max_length=30, blank=True)
+
+
+class AuditQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError('Audit history is read-only.')
+
+    def delete(self):
+        raise ValidationError('Audit history is read-only.')
+
+
+class AuditEvent(models.Model):
+    occurred_at = models.DateTimeField(default=timezone.now, db_index=True)
+    actor_id = models.BigIntegerField(null=True)
+    actor_name = models.CharField(max_length=150)
+    transaction_id = models.CharField(max_length=64, db_index=True)
+    source = models.CharField(max_length=30)
+    action = models.CharField(max_length=12)
+    entity_type = models.CharField(max_length=30, db_index=True)
+    entity_id = models.CharField(max_length=64)
+    entity_table = models.CharField(max_length=64)
+    label = models.CharField(max_length=180)
+    before = models.JSONField(null=True)
+    after = models.JSONField(null=True)
+    credentials_changed = models.BooleanField(default=False)
+
+    objects = AuditQuerySet.as_manager()
+
+    class Meta:
+        ordering = ['-id']
+
+    def save(self, *args, **kwargs):
+        if self.pk and not self._state.adding:
+            raise ValidationError('Audit history is read-only.')
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('Audit history is read-only.')

@@ -13,6 +13,7 @@ This application is an early development build for a single household, not a fin
 - Push subscriptions use an explicit provider host allowlist to avoid sending requests to arbitrary URLs. The app never fetches a server address entered in settings.
 - API responses are not HTTP-cacheable. Offline snapshots require explicit device opt-in, expire after seven days, and are cleared on sign-out and rejected sessions.
 - No Docker socket, privileged app container, or published database port.
+- Database-triggered audit records commit or roll back with their business writes. Review is administrator-only, with no audit editing API. Passwords and subscription secrets are excluded. See [audit design](docs/AUDIT.md).
 
 ## Limits
 
@@ -20,7 +21,7 @@ This application is an early development build for a single household, not a fin
 - Revocation and session expiry cannot be checked offline. A saved copy may be visible until it expires or is removed locally.
 - The app does not control NAS administration, DNS, certificate provisioning, router access, or independent backup storage.
 - Notifications are best-effort. Push service acceptance does not prove device receipt.
-- Multi-factor authentication, per-bill visibility restrictions, configurable reminder policies, and a full editable audit trail are not implemented in this first version.
+- Multi-factor authentication, per-bill visibility restrictions, and configurable reminder policies are not implemented in this first version. Audit history is read-only; payment correction workflows are still pending.
 
 ## Tests
 

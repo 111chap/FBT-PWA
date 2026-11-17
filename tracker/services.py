@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 from .models import Bill, Recurrence, ReminderDelivery, PushSubscription
+from .audit import audited
 
 
 def money(value):
@@ -59,6 +60,7 @@ def send_push(subscription, title, body):
     webpush(subscription_info={'endpoint': subscription.endpoint, 'keys': subscription.keys}, data=json.dumps({'title': title, 'body': body, 'url': '/app/'}), vapid_private_key=settings.VAPID_PRIVATE_KEY, vapid_claims={'sub': settings.VAPID_SUBJECT}, timeout=10)
 
 
+@audited('worker')
 def materialize_recurring(today=None):
     today = today or timezone.localdate()
     for pk in Recurrence.objects.values_list('pk', flat=True):
@@ -72,6 +74,7 @@ def materialize_recurring(today=None):
             recurrence.save(update_fields=['next_due'])
 
 
+@audited('worker')
 def deliver_reminders(now=None):
     now = now or timezone.now()
     local = timezone.localtime(now)

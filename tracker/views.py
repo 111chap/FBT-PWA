@@ -14,14 +14,17 @@ from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import connection, transaction, IntegrityError
 from django.db.models import ProtectedError
+from django.db.models import Q
+from django.core.paginator import Paginator
 from django.http import HttpResponse, JsonResponse, FileResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
-from .models import Bill, Loan, Payment, Recurrence, SiteSettings, LoginFailure, PushSubscription, WorkerHeartbeat
+from .models import Bill, Loan, Payment, Recurrence, SiteSettings, LoginFailure, PushSubscription, WorkerHeartbeat, AuditEvent
 from .services import money, next_month, validate_server_url, validate_push_endpoint, push_ready, send_push
+from .audit import trigger_status
 
 User = get_user_model()
 
@@ -190,7 +193,7 @@ def reachable(request):
 @require_GET
 @api
 def snapshot(request):
-    site, _ = SiteSettings.objects.get_or_create(pk=1)
+    site = SiteSettings.objects.filter(pk=1).first() or SiteSettings()
     bills = []
     for bill in Bill.objects.select_related('responsible', 'created_by').prefetch_related('payments__recorded_by'):
         balance = bill.balance
@@ -296,6 +299,7 @@ def status(request):
     checks.append({'name': 'Your registered devices', 'state': 'configured' if PushSubscription.objects.filter(user=request.user).exists() else 'warning', 'detail': f'{PushSubscription.objects.filter(user=request.user).count()} notification subscription(s) for your account.'})
     checks.append({'name': 'Docker / NAS', 'state': 'manual', 'detail': 'Check Container Manager → Project → fbt. The app deliberately has no Docker-control access.'})
     checks.append({'name': 'Backup recovery', 'state': 'manual', 'detail': 'A backup is not verified until restored. Follow the backup and restore guide.'})
+    checks.append(trigger_status())
     return JsonResponse({'checked_at': timezone.now().isoformat(), 'checks': checks})
 
 
@@ -347,3 +351,48 @@ def test_push(request):
     except Exception:
         return JsonResponse({'error': 'Push service did not accept the test. Check worker logs and keys.'}, status=502)
     return JsonResponse({'ok': True, 'note': 'Push service accepted the test. Confirm that you received it on your phone.'})
+
+
+@require_GET
+@api
+def audit_history(request):
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Only the family administrator can review the full audit history.'}, status=403)
+    events = AuditEvent.objects.all()
+    search = request.GET.get('search', '').strip()
+    if len(search) > 150:
+        raise ValidationError('Use a shorter search term.')
+    if search:
+        events = events.filter(Q(label__icontains=search) | Q(actor_name__icontains=search) | Q(transaction_id__icontains=search))
+    choices = {
+        'entity_type': {'bill', 'payment', 'loan', 'recurrence', 'settings', 'account', 'access', 'device', 'reminder', 'system'},
+        'action': {'insert', 'update', 'delete', 'started'},
+        'source': {'app', 'admin', 'setup', 'worker', 'database', 'migration'},
+    }
+    for field, allowed in choices.items():
+        value = request.GET.get(field, '')
+        if value:
+            if value not in allowed:
+                raise ValidationError('Choose a valid audit filter.')
+            events = events.filter(**{field: value})
+    start = parsed_date(request.GET['from']) if request.GET.get('from') else None
+    end = parsed_date(request.GET['to']) if request.GET.get('to') else None
+    if start and end and start > end:
+        raise ValidationError('The start date must be before the end date.')
+    if start:
+        events = events.filter(occurred_at__date__gte=start)
+    if end:
+        events = events.filter(occurred_at__date__lte=end)
+    transaction_id = request.GET.get('transaction', '')
+    if transaction_id:
+        if len(transaction_id) > 64:
+            raise ValidationError('Invalid transaction reference.')
+        events = events.filter(transaction_id=transaction_id)
+    page_number = int(request.GET.get('page', 1))
+    if page_number < 1:
+        raise ValidationError('Choose a valid page.')
+    paginator = Paginator(events, 25)
+    page = paginator.get_page(page_number)
+    fields = ['id', 'occurred_at', 'actor_id', 'actor_name', 'transaction_id', 'source', 'action', 'entity_type', 'entity_id', 'entity_table', 'label', 'before', 'after', 'credentials_changed']
+    started = AuditEvent.objects.filter(action='started', entity_type='system').order_by('id').values_list('occurred_at', flat=True).first()
+    return JsonResponse({'events': list(page.object_list.values(*fields)), 'page': page.number, 'pages': paginator.num_pages, 'total': paginator.count, 'has_next': page.has_next(), 'has_previous': page.has_previous(), 'logging_started_at': started})

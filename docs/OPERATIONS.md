@@ -43,9 +43,12 @@ System status shows:
 - Whether this request used HTTPS.
 - Whether all VAPID settings exist, independently from confirmed device delivery.
 - Registered device count for the current account.
+- Audit and balance trigger presence, with an error if a required trigger is missing or disabled.
 - Manual checks for Container Manager and backup restoration.
 
 The browser cannot inspect components if it cannot reach the server. Docker health checks verify the app liveness endpoint and worker heartbeat. A healthy worker is evidence that its schedule cycle completed, not a guarantee every push notification was received.
+
+Administrators can review committed database changes in **Audit history**. See [audit review and atomicity](AUDIT.md) for before/after snapshots, grouped transaction references, log coverage, and rollback guarantees. Apply migrations before starting the updated web and worker services, and back up first. Earlier activity is not reconstructed.
 
 ```sh
 docker compose logs --tail=100 web worker init
