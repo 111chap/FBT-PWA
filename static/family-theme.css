@@ -1,13 +1,13 @@
 /* Family-facing screens only: warm cream, soft cards, and restrained toffee. */
 .family-app{background:var(--cream-50);font-size:15px}
-.family-app .sidebar{width:238px;background:var(--cream-50);border-right:1px solid var(--line);padding:30px 20px;gap:0}
+.family-app .sidebar{width:238px;background:var(--sidebar);border-right:1px solid var(--line);padding:30px 20px;gap:0}
 .family-app .workspace{margin-left:238px}
 .family-app .brand{color:var(--ink);font-size:16px;line-height:1.35;margin:2px 0 42px}
 .family-app .brand-mark{background:var(--toffee-500);color:var(--brand-label);border-radius:16px;box-shadow:0 4px 12px #9e62351a}
 .family-app .nav-label{color:var(--muted);font-size:10px;letter-spacing:1.6px}
 .family-app .sidebar nav{flex:0 1 auto;gap:7px;overflow:visible}
 .family-app .sidebar nav a{color:var(--muted);font-size:13px;font-weight:550;min-height:48px;border-radius:14px;padding:12px 14px;gap:13px}
-.family-app .sidebar nav a:hover{background:var(--toffee-100);color:var(--ink)}
+.family-app .sidebar nav a:hover{background:var(--sidebar-hover);color:var(--ink)}
 .family-app .sidebar nav a.active{background:var(--toffee-500);color:var(--brand-label);box-shadow:0 4px 12px #9e62351a}
 .family-app .sidebar nav a span{display:grid;place-items:center;flex-shrink:0}
 .family-app .sidebar nav a .desktop-label{display:block;width:auto;font-size:inherit;line-height:1.25}
@@ -139,3 +139,10 @@
   .family-app .footer{padding:18px 20px;font-size:10px;gap:14px;flex-wrap:wrap}
 }
 @media print{.family-app .sidebar,.family-app .topbar{display:none}.family-app .workspace{margin:0}}
+
+/* A warm navigation surface stays distinct from the cream canvas. */
+@media(max-width:780px){
+  .family-app .sidebar{background:var(--sidebar)}
+  .family-app .sidebar>nav a.active span{background:var(--surface)}
+  .family-app .sidebar .mobile-add{border-color:var(--sidebar)}
+}

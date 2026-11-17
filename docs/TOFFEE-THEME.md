@@ -1,7 +1,9 @@
 # Toffee theme and typography
 
 The app uses the palette proposed in issue #15: cream canvas, white surfaces,
-espresso text, toffee actions, and a cream sidebar. The user's visual reference
+espresso text, toffee actions, and a soft toffee-tinted sidebar (#F5EBE1).
+The navigation tint separates it from the cream canvas on desktop and mobile.
+The user's visual reference
 sets the direction: soft rounded cards, restrained brown accents, and a compact
 mobile bar with a central add action. Sage indicates success;
 warning, overdue, and destructive states retain distinct colors and text labels.
@@ -35,7 +37,7 @@ reload. Screenshots use fictional records and are saved as CI artifacts.
 These checks cover representative controls and text; they are not a complete
 accessibility certification.
 
-The public service-worker cache advances to v13 and includes the font, so an
+The public service-worker cache advances to v14 and includes the font, so an
 existing installation fetches the updated shell when connected. Saving financial
 records for offline review remains an explicit per-device choice. No database
 migrations or additional production dependencies are needed. Existing backup
