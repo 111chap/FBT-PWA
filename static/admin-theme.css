@@ -1,0 +1,44 @@
+@import url('/static/fonts.css');
+/* Map Django's own light/dark/auto selection onto the family palette. */
+:root,html[data-theme="light"],html[data-theme="dark"] {
+  --font-family-primary:var(--font-ui);
+  --primary:var(--toffee-500);
+  --secondary:var(--sidebar);
+  --accent:var(--sidebar-text);
+  --body-fg:var(--ink);
+  --body-bg:var(--cream-50);
+  --body-quiet-color:var(--muted);
+  --body-loud-color:var(--ink);
+  --header-color:var(--sidebar-text);
+  --header-branding-color:var(--sidebar-text);
+  --header-bg:var(--sidebar);
+  --header-link-color:var(--sidebar-text);
+  --breadcrumbs-bg:var(--sidebar);
+  --breadcrumbs-fg:var(--sidebar-text);
+  --breadcrumbs-link-fg:var(--sidebar-text);
+  --link-fg:var(--toffee-600);
+  --link-hover-color:var(--ink);
+  --link-selected-fg:var(--toffee-600);
+  --hairline-color:var(--line);
+  --border-color:var(--control-border);
+  --darkened-bg:var(--toffee-100);
+  --selected-bg:var(--hover);
+  --selected-row:var(--toffee-100);
+  --button-fg:var(--brand-label);
+  --button-bg:var(--toffee-500);
+  --button-hover-bg:var(--toffee-600);
+  --default-button-bg:var(--toffee-500);
+  --default-button-hover-bg:var(--toffee-600);
+  --close-button-bg:var(--toffee-600);
+  --close-button-hover-bg:var(--toffee-500);
+  --delete-button-bg:var(--danger-button);
+  --delete-button-hover-bg:var(--danger-hover);
+  --error-fg:var(--red);
+  --message-success-bg:var(--success-bg);
+  --message-warning-bg:var(--warning-bg);
+  --message-error-bg:var(--danger-bg);
+}
+body,input,select,textarea,button{font-family:var(--font-ui)}
+.module{background:var(--surface)}
+.deletelink,.delete-confirmation form input[type="submit"]{color:#fff!important}
+:focus-visible{outline:3px solid var(--focus);outline-offset:3px}

@@ -16,6 +16,16 @@ import uuid
 @skipUnless(os.getenv('FBT_BROWSER_TESTS') == '1', 'Set FBT_BROWSER_TESTS=1 to run real-browser checks.')
 @override_settings(SECURE_SSL_REDIRECT=False, SESSION_COOKIE_SECURE=False, CSRF_COOKIE_SECURE=False, ALLOWED_HOSTS=['localhost','127.0.0.1','testserver'])
 class BrowserWorkflowTests(StaticLiveServerTestCase):
+    def test_toffee_theme_and_offline_font(self):
+        admin=get_user_model().objects.create_superuser('qa-admin',password='Fictional-QA-passphrase-123!')
+        loan=Loan.objects.create(title='Family bicycle',total='200',installments=2,created_by=admin)
+        Bill.objects.create(title='Electricity',amount='90',due_date=timezone.localdate(),created_by=admin,responsible=admin)
+        Bill.objects.create(title='Bicycle installment',amount='100',due_date=timezone.localdate(),created_by=admin,responsible=admin,loan=loan)
+        paid=Bill.objects.create(title='Water',amount='30',due_date=timezone.localdate(),created_by=admin,responsible=admin)
+        Payment.objects.create(bill=paid,amount='30',paid_date=timezone.localdate(),recorded_by=admin,request_key=uuid.uuid4())
+        result=subprocess.run([shutil.which('node'),str(settings.BASE_DIR/'tests/browser-theme.cjs'),self.live_server_url],cwd=settings.BASE_DIR,text=True,encoding='utf-8',capture_output=True,timeout=180)
+        self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
+
     def test_guided_entry_paid_history_and_column_sorting(self):
         User=get_user_model()
         admin=User.objects.create_superuser('qa-admin',password='Fictional-QA-passphrase-123!')

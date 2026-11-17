@@ -1,1 +1,115 @@
-/* System fonts keep the app fully self-hosted and available offline. */
+/* DM Sans by Colophon Foundry. SIL Open Font License: fonts/OFL.txt.
+   Vendored from google/fonts/ofl/dmsans; no remote font requests. */
+@font-face {
+  font-family: 'DM Sans';
+  src: url('fonts/dm-sans.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+}
+:root {
+  --font-ui: 'DM Sans', 'Segoe UI', sans-serif;
+  --green: var(--toffee-500);
+  --green-dark: var(--sidebar);
+  --paper: var(--cream-50);
+  --warm: var(--toffee-100);
+  color-scheme: light;
+  --toffee-500: #9E6235;
+  --toffee-600: #7D4B25;
+  --toffee-100: #F5EBE1;
+  --cream-50: #FAF7F4;
+  --surface: #FFFFFF;
+  --ink: #2B1D14;
+  --muted: #6E5A4F;
+  --line: #E6DCD3;
+  --control-border: #927968;
+  --focus: #7D4B25;
+  --brand-label: #FFFFFF;
+  --sidebar: #2C3E50;
+  --sidebar-text: #F5EBE1;
+  --sidebar-muted: #D4C5B8;
+  --sidebar-hover: #3E5266;
+  --sidebar-active: #7D4B25;
+  --success-bg: #EAF0E9;
+  --success-text: #365743;
+  --success-bar: #5A7263;
+  --warning-bg: #FFF1D6;
+  --warning-text: #765016;
+  --danger-bg: #FAE9E4;
+  --red: #A33235;
+  --danger-button: #B52C35;
+  --danger-hover: #94212A;
+  --info-bg: #EAF0F5;
+  --info-text: #2C3E50;
+  --hover: #EEDDCB;
+  --backdrop: #1A120D88;
+  --shadow: #2B1D1425;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+  --toffee-500: #D4945A;
+  --toffee-600: #E7B488;
+  --toffee-100: #39291E;
+  --cream-50: #1A120D;
+  --surface: #261B14;
+  --ink: #F5EBE1;
+  --muted: #C7B4A6;
+  --line: #513D30;
+  --control-border: #AD8E77;
+  --focus: #E7B488;
+  --brand-label: #2B1D14;
+  --sidebar: #201812;
+  --sidebar-text: #F5EBE1;
+  --sidebar-muted: #C7B4A6;
+  --sidebar-hover: #493223;
+  --sidebar-active: #D4945A;
+  --success-bg: #24372A;
+  --success-text: #B5D3BB;
+  --success-bar: #8CB89B;
+  --warning-bg: #402E16;
+  --warning-text: #F0CB86;
+  --danger-bg: #42221E;
+  --red: #F19A92;
+  --danger-button: #B52C35;
+  --danger-hover: #94212A;
+  --info-bg: #263646;
+  --info-text: #BED3E6;
+  --hover: #493223;
+  --backdrop: #100B08BB;
+  --shadow: #00000055;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --toffee-500: #D4945A;
+  --toffee-600: #E7B488;
+  --toffee-100: #39291E;
+  --cream-50: #1A120D;
+  --surface: #261B14;
+  --ink: #F5EBE1;
+  --muted: #C7B4A6;
+  --line: #513D30;
+  --control-border: #AD8E77;
+  --focus: #E7B488;
+  --brand-label: #2B1D14;
+  --sidebar: #201812;
+  --sidebar-text: #F5EBE1;
+  --sidebar-muted: #C7B4A6;
+  --sidebar-hover: #493223;
+  --sidebar-active: #D4945A;
+  --success-bg: #24372A;
+  --success-text: #B5D3BB;
+  --success-bar: #8CB89B;
+  --warning-bg: #402E16;
+  --warning-text: #F0CB86;
+  --danger-bg: #42221E;
+  --red: #F19A92;
+  --danger-button: #B52C35;
+  --danger-hover: #94212A;
+  --info-bg: #263646;
+  --info-text: #BED3E6;
+  --hover: #493223;
+  --backdrop: #100B08BB;
+  --shadow: #00000055;
+}
