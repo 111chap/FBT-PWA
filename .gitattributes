@@ -5,3 +5,4 @@
 *.yaml text eol=lf
 *.pdf binary
 *.png binary
+/.githooks/* text eol=lf

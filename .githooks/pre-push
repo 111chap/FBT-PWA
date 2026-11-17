@@ -1,0 +1,13 @@
+#!/bin/sh
+# Local accident prevention; GitHub protection is configured separately.
+while read -r local_ref local_oid remote_ref remote_oid
+do
+    if [ "$remote_ref" = "refs/heads/main" ]; then
+        printf '%s\n' \
+            'Direct pushes to main are blocked in this checkout.' \
+            'Push a feature branch, open a pull request, and merge after its latest CI test passes.' \
+            'This local check does not enforce GitHub merge permissions.' >&2
+        exit 1
+    fi
+done
+exit 0
