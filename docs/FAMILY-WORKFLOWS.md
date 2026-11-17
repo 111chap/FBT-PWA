@@ -10,6 +10,8 @@ Screenshots use fictional automated-test accounts and bills:
 
 ![Member view of shared server settings](screenshots/member-settings.png)
 
+Guided Utilities/Loan entry, clickable bill headings, and shared paid history are covered in [bill entry and history](BILL-ENTRY-AND-HISTORY.md).
+
 ## Review and confirm
 
 Bill and loan creation, payment recording, shared settings, primary-payer changes, and schedule cancellation/removal show a separate review before any business write. Back, Escape, and closing review preserve the draft without saving. Explicit confirmation submits the displayed values. Offline operation remains read-only.
@@ -58,6 +60,6 @@ Account audit snapshots now include username, first name, last name, email, acti
 
 ## Upgrade and verification
 
-Back up the database and verify restore instructions in OPERATIONS.md. Stop web and worker processes before running migration `0004_family_workflows`, then restart both. The migration preserves all existing rows and audit history, adds lifecycle flags and retry receipts, and replaces audit triggers within the migration transaction. This also handles SQLite table rebuilds. Do not edit the frozen v1/v2 trigger definitions after deployment. Check System status → Audit logging after upgrading. Cached public shells advance to v6 with the new review/filter assets; private snapshots still require a live refresh for new fields.
+Back up the database and verify restore instructions in OPERATIONS.md. Stop web and worker processes before running migration `0004_family_workflows`, then restart both. The migration preserves all existing rows and audit history, adds lifecycle flags and retry receipts, and replaces audit triggers within the migration transaction. This also handles SQLite table rebuilds. Do not edit the frozen v1/v2 trigger definitions after deployment. Check System status → Audit logging after upgrading. Cached public shells advance to v7 with the new review/filter assets; private snapshots still require a live refresh for new fields.
 
 CI runs PostgreSQL 17 transaction/security/migration checks, JavaScript filter/offline tests and real Chromium workflows on every push/PR, and attaches screenshots as a browser-qa artifact. Browser checks use fictional accounts and an isolated test database; no real family records or local credentials enter the tests. Install the development-only browser dependency with `npm ci` and `npx playwright install chromium`; set `FBT_BROWSER_TESTS=1` when running Django tests to include those checks locally.

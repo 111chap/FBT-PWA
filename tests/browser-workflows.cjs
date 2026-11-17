@@ -25,6 +25,7 @@ async function main() {
     }
     await page.setViewportSize({width:1280,height:600});
     await page.locator('#overview .add-bill').click();
+    await page.locator('[data-bill-type=utilities]').click();
     await page.locator('#bill-form [name=title]').fill('Review-only fictional bill');
     await page.locator('#bill-form [name=amount]').fill('125');
     const initial=(await snapshot(page)).bills.length;
@@ -80,7 +81,7 @@ async function main() {
     await member.goto(base+'/app/#bills');
     await member.locator('#bills').waitFor({state:'visible'});
     assert.equal(await member.locator('.pay-bill').first().isDisabled(),true);
-    await member.locator('#bill-view-filters [name=sort]').selectOption('amount-desc');
+    await member.locator('#bills .sort-heading[data-sort=amount]').click();
     assert.match(await member.locator('#last-synced').innerText(),/Last updated/);
     await memberContext.setOffline(false);
     await member.locator('#refresh-snapshot').waitFor({state:'visible',timeout:40000});

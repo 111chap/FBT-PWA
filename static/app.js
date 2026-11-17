@@ -5,6 +5,8 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
   let data = null, connected = false, pendingRefresh = false, checking = false, signingOut = false;
   let auditEvents = [], auditPageNumber = 1, auditTransaction = '', selectedAudit = null, auditRequest = 0;
+  let billSort='date-asc', historyPage=1;
+  const historyPageSize=25;
   let offlineEnabled = localStorage.getItem('fbt-offline-enabled') === 'yes';
   const currency = value => new Intl.NumberFormat('en-PH', {style:'currency', currency:'PHP'}).format(Number(value));
   const dateLabel = value => new Date(value + 'T12:00:00').toLocaleDateString('en-PH', {month:'short', day:'numeric', year:'numeric'});
@@ -94,22 +96,78 @@
     }
   }
   function row(bill) {
-    return `<tr><td><button class="bill-detail" data-id="${bill.id}">${esc(bill.title)}</button><span class="small muted">${esc(bill.category)} · Primary payer: ${esc(bill.responsible)}${bill.recurring ? ' · Monthly' : ''}</span></td><td>${dateLabel(bill.due_date)}</td><td>${currency(bill.balance)}</td><td>${badge(bill.status)}</td><td>${Number(bill.balance) > 0 ? `<button class="button secondary pay-bill" data-id="${bill.id}" data-online ${!connected || pendingRefresh ? 'disabled' : ''}>Record payment</button>` : '✓ Complete'}</td></tr>`;
+    return `<tr><td><button class="bill-detail" data-id="${bill.id}">${esc(bill.title)}</button><span class="small muted">${esc(bill.category)} · Primary payer: ${esc(bill.responsible)}${bill.recurring ? ' · Monthly' : ''}</span></td><td>${dateLabel(bill.due_date)}</td><td data-label="Original amount">${currency(bill.amount)}</td><td data-label="Unpaid amount">${currency(bill.balance)}</td><td>${badge(bill.status)}</td><td>${Number(bill.balance) > 0 ? `<button class="button secondary pay-bill" data-id="${bill.id}" data-online ${!connected || pendingRefresh ? 'disabled' : ''}>Record payment</button>` : '✓ Complete'}</td></tr>`;
   }
   function renderBills() {
     if (!data) return;
     const search = $('search').value.toLowerCase();
     const filter = $('status-filter').value;
-    const bills = FBTFilters.filterRecords(data.bills, {...viewFilters('bill'), search, status:filter});
+    const bills = FBTFilters.filterRecords(data.bills, {...viewFilters('bill'), search, status:filter, sort:billSort});
     $('bill-rows').innerHTML = bills.map(row).join('');
     $('bills-empty').hidden = bills.length > 0;
+    updateSortHeadings();
   }
   function viewFilters(prefix) {
     return Object.fromEntries(new FormData($(`${prefix}-view-filters`)));
   }
+  const sortNames={title:'Bill',date:'Due date',original:'Original amount',amount:'Unpaid amount',status:'Status'};
+  const firstSort={title:'asc',date:'asc',original:'desc',amount:'desc',status:'asc'};
+  const sortDirection=(key,direction)=>key==='title'?(direction==='asc'?'A–Z':'Z–A'):key==='date'?(direction==='asc'?'earliest first':'latest first'):key==='status'?(direction==='asc'?'Paid → Part paid → Upcoming → Overdue':'Overdue → Upcoming → Part paid → Paid'):(direction==='asc'?'lowest first':'highest first');
+  $('mobile-bill-sort').innerHTML=Object.entries(sortNames).map(([key,name])=>`<button type="button" class="button secondary" data-sort="${key}" data-sort-name="${name}">${name}<span aria-hidden="true"></span></button>`).join('');
+  function updateSortHeadings() {
+    const [key,direction]=billSort.split('-');
+    document.querySelectorAll('[data-sort]').forEach(button=> {
+      const active=button.dataset.sort===key;
+      const next=active?(direction==='asc'?'desc':'asc'):firstSort[button.dataset.sort];
+      button.querySelector('span').textContent=active?(direction==='asc'?' ↑':' ↓'):'';
+      button.setAttribute('aria-label',`${sortNames[button.dataset.sort]}: sort ${sortDirection(button.dataset.sort,next)}`);
+      button.closest('th')?.setAttribute('aria-sort',active?(direction==='asc'?'ascending':'descending'):'none');
+      if(button.closest('#mobile-bill-sort')) button.setAttribute('aria-pressed',String(active));
+    });
+    $('bill-sort-description').textContent=`Sorted by ${sortNames[key].toLowerCase()}: ${sortDirection(key,direction)}. Select a heading again to reverse.`;
+  }
+  document.querySelectorAll('[data-sort]').forEach(button=>button.addEventListener('click',()=> {
+    const [current,direction]=billSort.split('-'), key=button.dataset.sort;
+    billSort=`${key}-${key===current?(direction==='asc'?'desc':'asc'):firstSort[key]}`;
+    renderBills();
+  }));
+  function renderHistoryMembers() {
+    const payers=new Map(data.members.map(m=>[String(m.id),m.username])), recorders=new Map();
+    for(const bill of data.bills) {
+      payers.set(FBTFilters.identityKey(bill.responsible_id,bill.responsible),bill.responsible);
+      for(const payment of bill.payments) recorders.set(FBTFilters.identityKey(payment.recorded_by_id,payment.recorded_by),payment.recorded_by);
+    }
+    for(const [name,entries,label] of [['payer',payers,'All family members'],['recorder',recorders,'Anyone']]) {
+      const select=$('history-filters').elements[name], previous=select.value;
+      select.innerHTML=`<option value="">${label}</option>`+[...entries].sort((a,b)=>a[1].localeCompare(b[1])).map(([id,name])=>`<option value="${esc(id)}">${esc(name)}</option>`).join('');
+      if(entries.has(previous)) select.value=previous;
+    }
+  }
+  function renderHistory() {
+    if(!data) return;
+    const filters=Object.fromEntries(new FormData($('history-filters')));
+    const invalid=filters.from && filters.to && filters.from>filters.to;
+    const records=invalid?[]:FBTFilters.paidHistory(data.bills,filters);
+    const pages=Math.max(1,Math.ceil(records.length/historyPageSize)); historyPage=Math.min(historyPage,pages);
+    $('history-rows').innerHTML=records.slice((historyPage-1)*historyPageSize,historyPage*historyPageSize).map(bill=> {
+      const loan=data.loans.find(loan=>loan.id===bill.loan_id);
+      return `<tr><td><strong>${esc(bill.title)}</strong><span class="small muted">${esc(bill.category)} · Primary payer: ${esc(bill.responsible)}${loan?` · Loan: ${esc(loan.title)}`:''}</span></td><td data-label="Original amount">${currency(bill.amount)}</td><td data-label="Total recorded">${currency(bill.total_paid)}</td><td data-label="Due date">${dateLabel(bill.due_date)}</td><td data-label="Fully paid">${dateLabel(bill.completed_date)}</td><td><button class="button secondary bill-detail" data-id="${bill.id}">Review payments</button></td></tr>`;
+    }).join('');
+    $('history-empty').hidden=records.length>0;
+    $('history-summary').textContent=invalid?'Start date must not be after the end date.':`${records.length} fully paid bill${records.length===1?'':'s'} · Shared family history · Saved ${stamp(data.synced_at)}`;
+    $('history-page').textContent=`Page ${historyPage} of ${pages}`;
+    $('history-previous').disabled=historyPage<=1; $('history-next').disabled=historyPage>=pages;
+  }
+  const updateHistoryFilters=()=> {historyPage=1;renderHistory();};
+  $('history-filters').addEventListener('input',updateHistoryFilters);
+  $('history-filters').addEventListener('change',event=> {if(event.target.tagName==='SELECT') updateHistoryFilters();});
+  $('history-filters').addEventListener('submit',event=>event.preventDefault());
+  $('history-filters').addEventListener('reset',()=>setTimeout(()=> {historyPage=1;renderHistory();},0));
+  $('history-previous').addEventListener('click',()=> {historyPage=Math.max(1,historyPage-1);renderHistory();});
+  $('history-next').addEventListener('click',()=> {historyPage+=1;renderHistory();});
   for(const prefix of ['bill','loan']) {
     const form = document.createElement('form'); form.id = `${prefix}-view-filters`; form.className = 'view-filters';
-    form.innerHTML = `${prefix === 'loan' ? '<label>Search loans / primary payer<input name="search" type="search"></label><label>Show<select name="status"><option value="all">All loans</option><option value="unpaid">Unpaid</option><option value="paid">Fully repaid</option></select></label>' : ''}<label>${prefix === 'loan' ? 'Next unpaid due from' : 'Due from'}<input name="from" type="date"></label><label>Through date (inclusive)<input name="to" type="date"></label><label>Minimum unpaid (PHP)<input name="min" class="amount-input" inputmode="decimal" type="number" min="0" step="0.01"></label><label>Maximum unpaid (PHP)<input name="max" class="amount-input" inputmode="decimal" type="number" min="0" step="0.01"></label><label>Sort by<select name="sort"><option value="date-asc">Due date: earliest first</option><option value="date-desc">Due date: latest first</option><option value="amount-asc">Unpaid: lowest first</option><option value="amount-desc">Unpaid: highest first</option></select></label><button type="reset" class="button secondary">Clear filters</button><p class="filter-error form-error" hidden role="alert"></p>`;
+    form.innerHTML = `${prefix === 'loan' ? '<label>Search loans / primary payer<input name="search" type="search"></label><label>Show<select name="status"><option value="all">All loans</option><option value="unpaid">Unpaid</option><option value="paid">Fully repaid</option></select></label>' : ''}<label>${prefix === 'loan' ? 'Next unpaid due from' : 'Due from'}<input name="from" type="date"></label><label>Through date (inclusive)<input name="to" type="date"></label><label>Minimum unpaid (PHP)<input name="min" class="amount-input" inputmode="decimal" type="number" min="0" step="0.01"></label><label>Maximum unpaid (PHP)<input name="max" class="amount-input" inputmode="decimal" type="number" min="0" step="0.01"></label>${prefix === 'loan' ? '<label>Sort by<select name="sort"><option value="date-asc">Due date: earliest first</option><option value="date-desc">Due date: latest first</option><option value="amount-asc">Unpaid: lowest first</option><option value="amount-desc">Unpaid: highest first</option></select></label>' : ''}<button type="reset" class="button secondary">Clear filters</button><p class="filter-error form-error" hidden role="alert"></p>`;
     $(`${prefix}-filters`).append(form);
     const update = () => {
       const f = viewFilters(prefix), message = form.querySelector('.filter-error');
@@ -117,8 +175,10 @@
       message.hidden = !invalid; message.textContent = 'Start date and minimum amount must not exceed their end / maximum.';
       if(prefix === 'bill') renderBills(); else renderLoans();
     };
-    form.addEventListener('submit',event=>event.preventDefault()); form.addEventListener('input',update); form.addEventListener('change',update);
-    form.addEventListener('reset',()=> { if(prefix==='bill') { $('search').value=''; $('status-filter').value='all'; } setTimeout(update,0); });
+    form.addEventListener('submit',event=>event.preventDefault()); form.addEventListener('input',update);
+    // Text-field blur must not rebuild rows between pointer-down and click.
+    form.addEventListener('change',event=> {if(event.target.tagName==='SELECT') update();});
+    form.addEventListener('reset',()=> { if(prefix==='bill') { $('search').value=''; $('status-filter').value='all'; billSort='date-asc'; } setTimeout(update,0); });
   }
   function renderRecurrences() {
     $('recurrence-list').innerHTML = (data.recurrences || []).filter(r=>!r.removed).map(r=>`<div class="recurrence-item"><strong>${esc(r.title)}</strong><p class="hint">Day ${r.anchor_day} each month · ${r.active ? 'Active' : 'Cancelled'} · Primary payer: ${esc(data.members.find(m=>m.id===r.responsible_id)?.username || 'Inactive member')}</p>${data.user.admin && r.active ? `<button class="button secondary recurrence-action" data-id="${r.id}" data-action="cancel" data-online>Cancel schedule</button>` : ''}${data.user.admin && !data.bills.some(b=>b.recurrence_id===r.id && b.payments.length) ? `<button class="button secondary recurrence-action" data-id="${r.id}" data-action="remove" data-online>Remove schedule</button>` : ''}</div>`).join('') || '<p class="hint">No monthly schedules.</p>';
@@ -177,13 +237,11 @@
     const overdue = unpaid.filter(b => b.status === 'overdue');
     const weekEnd = new Date(data.today + 'T12:00:00'); weekEnd.setDate(weekEnd.getDate()+7);
     const coming = unpaid.filter(b => b.due_date >= data.today && new Date(b.due_date + 'T12:00:00') <= weekEnd);
-    const paid = data.bills.filter(b => b.status === 'paid');
     const sum = bills => bills.reduce((total,b) => total + Math.round(Number(b.balance)*100),0)/100;
     $('stats').innerHTML = [
       ['Total unpaid',currency(sum(unpaid)),`${unpaid.length} bills to take care of`,''],
       ['Due in the next 7 days',currency(sum(coming)),`${coming.length} upcoming payments`,''],
-      ['Overdue',currency(sum(overdue)),`${overdue.length} bills need a look`,'warm'],
-      ['Paid bills',paid.length,'One less thing on your list','']
+      ['Overdue',currency(sum(overdue)),`${overdue.length} bills need a look`,'warm']
     ].map(([label,value,detail,cls]) => `<article class="stat ${cls}"><p class="stat-label">${label}</p><div class="stat-value">${value}</div><p>${detail}</p></article>`).join('');
     $('upcoming-list').innerHTML = unpaid.slice(0,5).map(b => `<div class="bill-item"><span class="category-icon" aria-hidden="true">${b.loan_id ? '↗' : '▤'}</span><div class="bill-info"><strong>${esc(b.title)}</strong><p>${dateLabel(b.due_date)} · Primary payer: ${esc(b.responsible)}</p></div><div class="bill-amount"><strong>${currency(b.balance)}</strong><div>${badge(b.status)}</div></div></div>`).join('') || '<div class="empty"><h3>Nothing on the list just yet.</h3><p>Add your first bill, or enjoy being all caught up.</p></div>';
     const activity = data.bills.flatMap(b => b.payments.map(p => ({...p, title:b.title}))).sort((a,b) => b.paid_date.localeCompare(a.paid_date)).slice(0,4);
@@ -202,10 +260,10 @@
     $('admin-link').hidden = !data.user.admin;
     $('audit-nav').hidden = !data.user.admin;
     $('offline-setting').textContent = offlineEnabled ? `Enabled on this device. Saved copies expire after seven days. Last fetched ${stamp(data.synced_at)}.` : 'Offline viewing is off. Enable it on a trusted device while connected.';
-    renderBills(); route();
+    renderBills(); renderHistoryMembers(); renderHistory(); route();
   }
   function route() {
-    const name = ['overview','bills','loans','system','setup','audit'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'overview';
+    const name = ['overview','bills','loans','history','system','setup','audit'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'overview';
     document.querySelectorAll('.page').forEach(section => section.hidden = !data || section.id !== name);
     document.querySelectorAll('[data-nav]').forEach(link => { link.classList.toggle('active',link.dataset.nav === name); if(link.dataset.nav === name) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current'); });
     if (name === 'system' && connected && !pendingRefresh) health();
@@ -304,8 +362,8 @@
       rows.push(['Remaining after payment',currency((Math.round(Number(bill.balance)*100)-Math.round(Number(value.amount)*100))/100)]);
     }
     if(form.id === 'loan-form') {
-      const count = Number(value.installments), total = Math.round(Number(value.total)*100), each = Math.floor(total/count);
-      rows.push(['Installment amounts',`${count-1} × ${currency(each/100)}; final ${currency((total-each*(count-1))/100)}`],['Monthly due day',`Day ${Number(value.first_due.slice(-2))}; last valid day in shorter months`]);
+      const schedule=FBTFilters.loanSchedule(value.total,Number(value.installments),value.first_due);
+      rows.push(['Monthly due day',`Day ${Number(value.first_due.slice(-2))}; last valid day in shorter months`],...schedule.map(part=>[`Installment ${part.number}`,`${dateLabel(part.due_date)} · ${currency(part.amount)}`]));
     }
     if(form.id === 'server-form') for(const key of ['family_name','nas_name','server_url']) rows.push([`Previously: ${key.replaceAll('_',' ')}`,data[key] || 'Not set']);
     if(form.id === 'payer-form') rows.unshift(['Current assignment',$('payer-current').textContent]);
@@ -334,8 +392,33 @@
       finally { delete form.dataset.busy; button.disabled = !connected || pendingRefresh; }
     });
   }
-  document.querySelectorAll('.add-bill').forEach(button => button.addEventListener('click', () => { $('bill-form').reset(); $('bill-form').elements.due_date.value = today(); openDialog('bill-dialog'); }));
-  $('add-loan').addEventListener('click', () => { $('loan-form').reset(); $('loan-form').elements.first_due.value = today(); openDialog('loan-dialog'); });
+  function startBillEntry(type=null) {
+    if(!connected || pendingRefresh) { toast('Connect to home and update your bills first.'); return; }
+    for(const id of ['bill-form','loan-form']) {
+      const form=$(id); form.reset(); form.elements.responsible.value=data.user.id;
+      form.elements[id==='bill-form'?'due_date':'first_due'].value=today();
+    }
+    updateLoanPreview();
+    openDialog(type==='loan'?'loan-dialog':'bill-type-dialog');
+  }
+  document.querySelectorAll('.add-bill').forEach(button=>button.addEventListener('click',()=>startBillEntry()));
+  $('add-loan').addEventListener('click',()=>startBillEntry('loan'));
+  document.querySelectorAll('[data-bill-type]').forEach(button=>button.addEventListener('click',()=> {
+    $('bill-type-dialog').close(); openDialog(button.dataset.billType==='loan'?'loan-dialog':'bill-dialog');
+  }));
+  document.querySelectorAll('.back-to-bill-type').forEach(button=>button.addEventListener('click',()=> {
+    button.closest('dialog').close(); openDialog('bill-type-dialog');
+  }));
+  function updateLoanPreview() {
+    try {
+      const form=$('loan-form'), parts=FBTFilters.loanSchedule(form.elements.total.value,Number(form.elements.installments.value),form.elements.first_due.value);
+      $('loan-preview-rows').innerHTML=parts.map(p=>`<tr><td>${p.number}</td><td>${dateLabel(p.due_date)}</td><td>${currency(p.amount)}</td></tr>`).join('');
+      $('loan-preview-summary').textContent=`${parts.length} installments · ${currency(form.elements.total.value)} agreed total. The final installment includes any rounding difference.`;
+      $('loan-preview').hidden=false;
+    } catch(_) { $('loan-preview').hidden=true; $('loan-preview-rows').replaceChildren(); }
+  }
+  $('loan-form').addEventListener('input',updateLoanPreview);
+  $('loan-form').addEventListener('change',updateLoanPreview);
   document.querySelectorAll('.close-dialog').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
   document.addEventListener('click', event => {
     const auditReview = event.target.closest('.audit-review');
@@ -349,8 +432,9 @@
     if (detail) {
       const bill = data.bills.find(b => b.id === Number(detail.dataset.id));
       $('detail-title').textContent = bill.title;
-      $('detail-notes').textContent = bill.notes || 'No notes added.';
-      $('detail-summary').textContent = `${currency(bill.amount)} total · ${currency(bill.balance)} unpaid · Due ${dateLabel(bill.due_date)} · Primary payer: ${bill.responsible}`;
+      const parentLoan=data.loans.find(loan=>loan.id===bill.loan_id);
+      $('detail-notes').textContent = (parentLoan ? `Loan: ${parentLoan.title}. ` : '') + (bill.notes || 'No notes added.');
+      $('detail-summary').textContent = `${currency(bill.amount)} original · ${currency(bill.balance)} unpaid · Due ${dateLabel(bill.due_date)} · Primary payer: ${bill.responsible}`;
       $('detail-payments').innerHTML = bill.payments.map(p => `<div class="activity"><div><strong>${currency(p.amount)}</strong><p>${dateLabel(p.paid_date)} · Recorded by ${esc(p.recorded_by)}</p></div></div>`).join('') || '<p class="small muted">No payments recorded yet.</p>';
       showDetailActions(bill);
       $('detail-dialog').showModal();
