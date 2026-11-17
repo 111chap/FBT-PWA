@@ -81,13 +81,15 @@ See [bill entry, sorting, and paid history](docs/BILL-ENTRY-AND-HISTORY.md) for 
 
 See [profiles, responsive layouts, and measured performance](docs/PROFILE-AND-PERFORMANCE.md) for account access, offline profiles, list pagination, and the fictional 2,000-bill benchmark.
 
+See [administrator financial corrections](docs/ADMIN-FINANCIAL-CORRECTIONS.md) for editing/deleting paid or unpaid bills, loans, and payments, reasoned audit history, and migration/backup requirements.
+
 See [family workflows](docs/FAMILY-WORKFLOWS.md) for review/confirmation, shared settings, monthly lifecycle, filters, payer assignment, and upgrade instructions. CI also installs Chromium and runs real-browser regression checks.
 
 ## Remaining work
 
 See the [solo developer workflow](docs/WORKFLOW.md) for feature branches, PRs, local `main` push prevention, and CI-before-merge guidance. GitHub-enforced protection is currently unavailable under the private repository's plan.
 
-Physical iPhone/Android push verification, real NAS deployment, backup restoration, configurable reminder times/recipients, bill editing and payment corrections, and further accessibility testing remain. See [roadmap](ROADMAP.md). The [original outline](FAMILY-BILL-TRACKER-IDEA.md) and [PDF overview](output/pdf/FAMILY-BILL-TRACKER-IDEA.pdf) describe the earlier planning proposal rather than current completion status.
+Physical iPhone/Android push verification, real NAS deployment, backup restoration, configurable reminder times/recipients, and further accessibility testing remain. See [roadmap](ROADMAP.md). The [original outline](FAMILY-BILL-TRACKER-IDEA.md) and [PDF overview](output/pdf/FAMILY-BILL-TRACKER-IDEA.pdf) describe the earlier planning proposal rather than current completion status.
 
 ## Author and attribution
 

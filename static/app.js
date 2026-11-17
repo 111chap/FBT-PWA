@@ -3,6 +3,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
+  FBTCorrections.configure({request:api,refresh:loadSnapshot,notify:toast});
   let data = null, connected = false, pendingRefresh = false, checking = false, signingOut = false;
   let auditEvents = [], auditPageNumber = 1, auditTransaction = '', selectedAudit = null, auditRequest = 0;
   let billSort='date-asc', loanSort='date-asc', historySort='date-desc', historyPage=1;
@@ -77,7 +78,7 @@
   }
   function setConnection(value) {
     connected = value;
-    if(data)FBTProfile.update(data,connected);
+    if(data){FBTProfile.update(data,connected);FBTCorrections.update(data,connected,pendingRefresh);}
     $('connection-badge').className = 'badge ' + (value ? 'healthy' : 'warning');
     $('connection-badge').textContent = value ? '● Home server connected' : '○ Offline · read-only';
     $('home-copy').textContent = value ? 'Your home server is reachable. Your family is connected.' : 'You are viewing a saved copy. Updates need a connection to your home server.';
@@ -212,7 +213,7 @@
   function showDetailActions(bill) {
     const recurrence = (data.recurrences || []).find(r=>r.id===bill.recurrence_id);
     $('detail-recurrence').textContent = recurrence ? `Monthly: day ${recurrence.anchor_day} (last valid day in shorter months). Schedule ${recurrence.active ? 'active' : 'cancelled'}.` : '';
-    $('detail-actions').innerHTML = data.user.admin ? `<button class="button secondary reassign-payer" data-id="${bill.id}" data-online>Change primary payer</button>${!bill.loan_id && !bill.payments.length ? `<button class="button secondary remove-bill" data-id="${bill.id}" data-online>Remove bill</button>` : ''}` : '';
+    $('detail-actions').innerHTML = data.user.admin ? `<button class="button secondary reassign-payer" data-id="${bill.id}" data-online>Change primary payer</button>${FBTCorrections.controls('bill',bill.id)}` : '';
     setConnection(connected);
   }
   document.addEventListener('click',async event=> {
@@ -262,7 +263,7 @@
     $('detail-title').textContent=loan.title;
     $('detail-summary').textContent=`${currency(loan.total)} agreed total · ${currency(bills.reduce((sum,b)=>sum+Math.round(Number(b.balance)*100),0)/100)} unpaid · ${loan.installments} installments`;
     $('detail-recurrence').textContent='Monthly repayment schedule';
-    $('detail-actions').replaceChildren();
+    $('detail-actions').innerHTML=FBTCorrections.controls('loan',loan.id);
     $('detail-notes').textContent='Select an installment to review its bill and recorded payments.';
     $('detail-payments').innerHTML=bills.map(b=>`<div class="activity"><div><button class="bill-detail" data-id="${b.id}">${esc(b.title)}</button><p>${dateLabel(b.due_date)} · Primary payer: ${esc(b.responsible)}</p><p>${currency(b.amount)} original · ${currency(b.balance)} unpaid</p></div>${badge(b.status)}</div>`).join('');
     $('detail-dialog').showModal();
@@ -361,6 +362,7 @@
   function reviewAudit(event) {
     selectedAudit = event;
     $('audit-detail-title').textContent = event.label;
+    $('audit-detail-reason').textContent=event.reason?`Reason: ${event.reason}`:'';
     $('audit-detail-meta').textContent = `${auditStamp(event.occurred_at)} · ${event.actor_name} · ${event.source} · ${event.action}`;
     $('audit-credentials-note').hidden = !event.credentials_changed;
     const before = event.before || {}, after = event.after || {};
@@ -482,7 +484,7 @@
       const parentLoan=data.loans.find(loan=>loan.id===bill.loan_id);
       $('detail-notes').textContent = (parentLoan ? `Loan: ${parentLoan.title}. ` : '') + (bill.notes || 'No notes added.');
       $('detail-summary').textContent = `${currency(bill.amount)} original · ${currency(bill.balance)} unpaid · Due ${dateLabel(bill.due_date)} · Primary payer: ${bill.responsible}`;
-      $('detail-payments').innerHTML = bill.payments.map(p => `<div class="activity"><div><strong>${currency(p.amount)}</strong><p>${dateLabel(p.paid_date)} · Recorded by ${esc(p.recorded_by)}</p></div></div>`).join('') || '<p class="small muted">No payments recorded yet.</p>';
+      $('detail-payments').innerHTML = bill.payments.map(p => `<div class="activity"><div><strong>${currency(p.amount)}</strong><p>${dateLabel(p.paid_date)} · Recorded by ${esc(p.recorded_by)}</p>${FBTCorrections.controls('payment',p.id)}</div></div>`).join('') || '<p class="small muted">No payments recorded yet.</p>';
       showDetailActions(bill);
       $('detail-dialog').showModal();
     }

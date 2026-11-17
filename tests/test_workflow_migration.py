@@ -8,7 +8,7 @@ from tracker.audit import trigger_status
 class FamilyWorkflowMigrationTests(TransactionTestCase):
     def test_upgrade_preserves_rows_history_and_all_triggers(self):
         old=[('tracker','0003_audit_triggers')]
-        latest=[('tracker','0004_family_workflows')]
+        latest=[('tracker','0005_financial_corrections')]
         executor=MigrationExecutor(connection)
         try:
             executor.migrate(old)

@@ -16,6 +16,16 @@ import uuid
 @skipUnless(os.getenv('FBT_BROWSER_TESTS') == '1', 'Set FBT_BROWSER_TESTS=1 to run real-browser checks.')
 @override_settings(SECURE_SSL_REDIRECT=False, SESSION_COOKIE_SECURE=False, CSRF_COOKIE_SECURE=False, ALLOWED_HOSTS=['localhost','127.0.0.1','testserver'])
 class BrowserWorkflowTests(StaticLiveServerTestCase):
+    def test_admin_financial_corrections(self):
+        admin=get_user_model().objects.create_superuser('qa-admin',password='Fictional-QA-passphrase-123!')
+        member=get_user_model().objects.create_user('qa-member',password='Fictional-QA-passphrase-123!')
+        loan=Loan.objects.create(title='Paid bicycle',total='200',installments=2,created_by=admin)
+        for title,amount,parent,paid in [('Paid water','100',None,True),('Bike 1','100',loan,True),('Bike 2','100',loan,True),('Electricity','90',None,False)]:
+            bill=Bill.objects.create(title=title,amount=amount,due_date=timezone.localdate(),responsible=member,created_by=admin,loan=parent)
+            if paid:Payment.objects.create(bill=bill,amount=amount,paid_date=timezone.localdate(),recorded_by=member,request_key=uuid.uuid4())
+        result=subprocess.run([shutil.which('node'),str(settings.BASE_DIR/'tests/browser-corrections.cjs'),self.live_server_url],cwd=settings.BASE_DIR,text=True,encoding='utf-8',capture_output=True,timeout=180)
+        self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
+
     def test_profile_and_responsive_matrix(self):
         admin=get_user_model().objects.create_superuser('qa-admin',password='Fictional-QA-passphrase-123!')
         get_user_model().objects.create_user('qa-member-with-a-long-display-name-for-layout-checks',password='Fictional-QA-passphrase-123!')

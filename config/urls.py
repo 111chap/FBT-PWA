@@ -1,8 +1,9 @@
 from django.contrib import admin
 from django.urls import path
-from tracker import views
+from tracker import views, corrections
 
 urlpatterns = [
+    path('api/manage/<str:kind>/<int:record_id>/',corrections.correct),
     path('', views.home), path('app/', views.shell),
     path('login/', views.login_view), path('logout/', views.logout_view),
     path('setup/', views.bootstrap), path('setup-guide/', views.setup_guide),

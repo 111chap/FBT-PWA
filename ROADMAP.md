@@ -22,7 +22,7 @@ This roadmap describes planned work. Items are checked only when delivered and v
 
 - [x] Implement bills, due dates, categories, and responsible members.
 - [x] Record partial and full payments with attribution and history.
-- [ ] Add bill editing and auditable payment corrections.
+- [x] Add administrator bill/loan/payment editing and logical deletion, including paid records, with required reasons and atomic audit history.
 - [x] Build the upcoming and overdue dashboard.
 - [x] Test money handling, permissions, payment status calculations, and concurrent payments.
 - [x] Add database-triggered audit history, administrator review, safe before/after snapshots, and rollback tests.
