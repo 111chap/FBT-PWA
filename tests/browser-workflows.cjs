@@ -88,7 +88,17 @@ async function main() {
     await member.waitForFunction(()=>document.querySelector('#notice').hidden);
     // Online sign-out clears the saved snapshot and the session, including other tabs.
     const second=await memberContext.newPage();second.on('pageerror',error=>failures.push(error.message));await second.goto(base+'/app/');await second.locator('#overview').waitFor({state:'visible'});
-    await member.locator('#logout').click();await member.waitForURL('**/login/');
+    let logoutRequests=0;
+    member.on('request',request=>{if(request.method()==='POST' && request.url()===base+'/logout/') logoutRequests+=1;});
+    await member.locator('#logout').click();await member.locator('.review-dialog').waitFor();
+    assert.equal(await member.locator('.review-dialog .secondary').evaluate(el=>el===document.activeElement),true);
+    assert.equal(logoutRequests,0,'Opening sign-out review must not end the session');
+    await member.keyboard.press('Escape');
+    assert.equal(await member.evaluate(()=>localStorage.getItem('fbt-offline-enabled')),'yes');
+    assert.equal((await member.request.get(base+'/api/snapshot/')).status(),200);
+    await member.locator('#logout').click();await member.getByRole('button',{name:'Stay signed in',exact:true}).click();
+    assert.equal(logoutRequests,0,'Cancelling must not send a logout request');
+    await member.locator('#logout').click();await member.locator('.review-dialog .primary').click();await member.waitForURL('**/login/');
     await second.waitForURL('**/login/');
     assert.equal(await member.evaluate(()=>localStorage.getItem('fbt-offline-enabled')),null);
     const response=await member.request.get(base+'/api/snapshot/');assert.equal(response.status(),401);
@@ -96,6 +106,10 @@ async function main() {
     await member.locator('#enable-offline').click();
     await member.waitForFunction(()=>localStorage.getItem('fbt-offline-enabled')==='yes');
     await memberContext.setOffline(true);await member.locator('#logout').click();
+    await member.locator('.review-dialog .secondary').click();
+    assert.equal(await member.evaluate(()=>localStorage.getItem('fbt-offline-enabled')),'yes');
+    assert.equal(await member.evaluate(()=>localStorage.getItem('fbt-logout-pending')),null);
+    await member.locator('#logout').click();await member.locator('.review-dialog .primary').click();
     await member.waitForFunction(()=>localStorage.getItem('fbt-logout-pending')==='yes' && !localStorage.getItem('fbt-offline-enabled'));
     await member.locator('#loading').waitFor({state:'visible'});
     await memberContext.setOffline(false);await member.reload();await member.waitForURL('**/login/');

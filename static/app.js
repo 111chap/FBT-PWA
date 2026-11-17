@@ -109,7 +109,7 @@
   }
   for(const prefix of ['bill','loan']) {
     const form = document.createElement('form'); form.id = `${prefix}-view-filters`; form.className = 'view-filters';
-    form.innerHTML = `${prefix === 'loan' ? '<label>Search loans / primary payer<input name="search" type="search"></label><label>Show<select name="status"><option value="all">All loans</option><option value="unpaid">Unpaid</option><option value="paid">Fully repaid</option></select></label>' : ''}<label>${prefix === 'loan' ? 'Next unpaid due from' : 'Due from'}<input name="from" type="date"></label><label>Through date (inclusive)<input name="to" type="date"></label><label>Minimum unpaid (PHP)<input name="min" type="number" min="0" step="0.01"></label><label>Maximum unpaid (PHP)<input name="max" type="number" min="0" step="0.01"></label><label>Sort by<select name="sort"><option value="date-asc">Due date: earliest first</option><option value="date-desc">Due date: latest first</option><option value="amount-asc">Unpaid: lowest first</option><option value="amount-desc">Unpaid: highest first</option></select></label><button type="reset" class="button secondary">Clear filters</button><p class="filter-error form-error" hidden role="alert"></p>`;
+    form.innerHTML = `${prefix === 'loan' ? '<label>Search loans / primary payer<input name="search" type="search"></label><label>Show<select name="status"><option value="all">All loans</option><option value="unpaid">Unpaid</option><option value="paid">Fully repaid</option></select></label>' : ''}<label>${prefix === 'loan' ? 'Next unpaid due from' : 'Due from'}<input name="from" type="date"></label><label>Through date (inclusive)<input name="to" type="date"></label><label>Minimum unpaid (PHP)<input name="min" class="amount-input" inputmode="decimal" type="number" min="0" step="0.01"></label><label>Maximum unpaid (PHP)<input name="max" class="amount-input" inputmode="decimal" type="number" min="0" step="0.01"></label><label>Sort by<select name="sort"><option value="date-asc">Due date: earliest first</option><option value="date-desc">Due date: latest first</option><option value="amount-asc">Unpaid: lowest first</option><option value="amount-desc">Unpaid: highest first</option></select></label><button type="reset" class="button secondary">Clear filters</button><p class="filter-error form-error" hidden role="alert"></p>`;
     $(`${prefix}-filters`).append(form);
     const update = () => {
       const f = viewFilters(prefix), message = form.querySelector('.filter-error');
@@ -410,7 +410,15 @@
       localStorage.removeItem('fbt-logout-pending'); location.replace('/login/');
     } catch(_) { $('loading').hidden = false; $('loading').innerHTML = '<h2>Saved records removed.</h2><p>Reconnect to your home network and reload to finish signing out of the server. The existing server session may remain active until then.</p>'; }
   }
-  $('logout').addEventListener('click',signOut);
+  let confirmingSignOut = false;
+  $('logout').addEventListener('click',async () => {
+    if(signingOut || confirmingSignOut) return;
+    confirmingSignOut = true;
+    try {
+      const accepted = await FBTReview({title:'Sign out of Family Bill Tracker?', rows:[['Account',data?.user.name || 'Current account']], action:'Sign out', cancelAction:'Stay signed in', note:'Your saved offline copy will be removed from this device. If your home server is unreachable, reconnect and reload to finish signing out of the server.'});
+      if(accepted && !signingOut) await signOut();
+    } finally { confirmingSignOut = false; }
+  });
   function pushSupported() { if(!isSecureContext || !('PushManager' in window) || !('serviceWorker' in navigator)) throw new Error('Notifications need supported browser features and trusted HTTPS. On iPhone, first open the Home Screen app.'); }
   $('enable-push').addEventListener('click',async () => {
     try {

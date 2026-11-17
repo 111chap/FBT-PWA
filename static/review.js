@@ -1,7 +1,7 @@
 /* A UI safeguard, not an authorization boundary. Never persist draft form values. */
 (() => {
   'use strict';
-  window.FBTReview = async function({title, rows, action = 'Confirm changes', note = ''}) {
+  window.FBTReview = async function({title, rows, action = 'Confirm changes', cancelAction = 'Back / cancel', note = ''}) {
     const previous = document.activeElement;
     const dialog = document.createElement('dialog');
     dialog.className = 'review-dialog';
@@ -14,7 +14,7 @@
       term.textContent = label; detail.textContent = String(value ?? '—'); list.append(term, detail);
     }
     const buttons = document.createElement('div'); buttons.className = 'button-row';
-    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'button secondary'; cancel.textContent = 'Back / cancel'; cancel.autofocus = true;
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'button secondary'; cancel.textContent = cancelAction; cancel.autofocus = true;
     const confirm = document.createElement('button'); confirm.type = 'button'; confirm.className = 'button primary'; confirm.textContent = action;
     buttons.append(cancel, confirm); dialog.append(heading, copy, list, buttons); document.body.append(dialog);
     return new Promise(resolve => {
