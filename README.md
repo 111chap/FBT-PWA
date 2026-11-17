@@ -76,6 +76,8 @@ Run with the environment described in [development](docs/DEVELOPMENT.md). [GitHu
 
 ## Remaining work
 
+See the [solo developer workflow](docs/WORKFLOW.md) for feature branches, PRs, local `main` push prevention, and CI-before-merge guidance. GitHub-enforced protection is currently unavailable under the private repository's plan.
+
 Physical iPhone/Android push verification, real NAS deployment, backup restoration, configurable reminder times/recipients, bill editing and payment corrections, and further accessibility testing remain. See [roadmap](ROADMAP.md). The [original outline](FAMILY-BILL-TRACKER-IDEA.md) and [PDF overview](output/pdf/FAMILY-BILL-TRACKER-IDEA.pdf) describe the earlier planning proposal rather than current completion status.
 
 ## Author and attribution
