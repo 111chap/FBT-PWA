@@ -7,7 +7,7 @@ font_paths = [root / 'static/fonts/dm-sans.ttf', Path('C:/Windows/Fonts/segoeuib
 font_path = next((path for path in font_paths if path.exists()), None)
 for size in (180, 192, 512):
     scale = 4
-    image = Image.new('RGB', (size * scale, size * scale), '#2C3E50')
+    image = Image.new('RGB', (size * scale, size * scale), '#9E6235')
     draw = ImageDraw.Draw(image)
     font = ImageFont.truetype(str(font_path), int(size * scale * .73)) if font_path else ImageFont.load_default(size=int(size * scale * .73))
     draw.text((size * scale * .32, size * scale * .03), 'f', font=font, fill='#F5EBE1')
