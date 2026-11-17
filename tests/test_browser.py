@@ -8,7 +8,7 @@ from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.test import override_settings
 from django.conf import settings
 from django.utils import timezone
-from tracker.models import Bill, Recurrence, Loan, Payment
+from tracker.models import Bill, Recurrence, Loan, Payment, SiteSettings
 from datetime import date
 import uuid
 
@@ -16,6 +16,17 @@ import uuid
 @skipUnless(os.getenv('FBT_BROWSER_TESTS') == '1', 'Set FBT_BROWSER_TESTS=1 to run real-browser checks.')
 @override_settings(SECURE_SSL_REDIRECT=False, SESSION_COOKIE_SECURE=False, CSRF_COOKIE_SECURE=False, ALLOWED_HOSTS=['localhost','127.0.0.1','testserver'])
 class BrowserWorkflowTests(StaticLiveServerTestCase):
+    def test_profile_and_responsive_matrix(self):
+        admin=get_user_model().objects.create_superuser('qa-admin',password='Fictional-QA-passphrase-123!')
+        get_user_model().objects.create_user('qa-member-with-a-long-display-name-for-layout-checks',password='Fictional-QA-passphrase-123!')
+        SiteSettings.objects.update_or_create(pk=1,defaults={'family_name':'A fictional family with a long workspace name for responsive layout checks'})
+        Bill.objects.create(title='A fictional household utility with a long descriptive title for mobile cards',amount='100',due_date=timezone.localdate(),responsible=admin,created_by=admin)
+        for index in range(35):
+            loan=Loan.objects.create(title=f'Fictional loan {index:02}',total='100',installments=1,created_by=admin)
+            Bill.objects.create(title=f'Loan installment {index:02}',amount='100',due_date=timezone.localdate(),responsible=admin,created_by=admin,loan=loan)
+        result=subprocess.run([shutil.which('node'),str(settings.BASE_DIR/'tests/browser-profile-responsive.cjs'),self.live_server_url],cwd=settings.BASE_DIR,text=True,encoding='utf-8',capture_output=True,timeout=180)
+        self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
+
     def test_toffee_theme_and_offline_font(self):
         admin=get_user_model().objects.create_superuser('qa-admin',password='Fictional-QA-passphrase-123!')
         loan=Loan.objects.create(title='Family bicycle',total='200',installments=2,created_by=admin)

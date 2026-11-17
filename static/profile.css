@@ -1,0 +1,33 @@
+.account-control{display:inline-flex;align-items:center;gap:8px;max-width:240px;min-height:44px;padding:5px 10px 5px 5px;border:1px solid var(--line);border-radius:24px;background:var(--surface);color:var(--ink);font:inherit;font-size:13px;cursor:pointer}
+.account-control:hover{background:var(--toffee-100)}
+#profile-toggle .avatar{display:grid;flex-shrink:0;width:30px;height:30px;font-size:11px}
+#account-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:145px}
+.account-caret{font-size:13px;color:var(--muted)}
+.profile-dialog{max-width:440px;background:var(--surface)}
+.profile-dialog dl{margin:24px 0;display:grid;gap:18px}
+.profile-dialog dt{color:var(--muted);font-size:12px;margin-bottom:4px}
+.profile-dialog dd{margin:0;font-size:16px;overflow-wrap:anywhere;font-weight:550}
+.profile-dialog .profile-note{padding:14px;background:var(--toffee-100);border-radius:12px;font-size:12px;color:var(--muted)}
+.profile-dialog .button-row{gap:12px}
+.profile-dialog .close-dialog{min-width:40px;min-height:40px;border-radius:10px}
+.profile-dialog [aria-disabled=true]{opacity:.55;pointer-events:none}
+.record-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0;font-size:12px;color:var(--muted)}
+.record-pagination span{text-align:center}
+.record-pagination button{min-width:90px}
+.family-app .topbar{position:sticky;top:0;z-index:3}
+.family-app .page{scroll-margin-top:calc(var(--header-height,100px) + 16px)}
+/* Wide record tables scroll in their own containers, never across the page. */
+html:has(body.family-app){overflow-x:clip}
+body.family-app{position:relative;overflow-x:clip;width:100%}
+@media(max-width:780px){
+  .family-app .topbar-right{max-width:200px}
+  .account-control{font-size:11px;min-height:44px;max-width:116px;padding:3px 6px;gap:5px}
+  #profile-toggle .avatar{width:24px;height:24px;font-size:10px}
+  #account-name{max-width:54px}
+  .account-caret{display:none}
+  .profile-dialog{padding:22px}
+  .record-pagination{flex-wrap:wrap;justify-content:center}
+  .record-pagination span{flex:1;min-width:100px;font-size:11px}
+  .record-pagination button{padding:10px!important;min-width:78px}
+}
+@media(max-height:500px){dialog{max-height:calc(100dvh - 24px)}}

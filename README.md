@@ -79,6 +79,8 @@ Run with the environment described in [development](docs/DEVELOPMENT.md). [GitHu
 
 See [bill entry, sorting, and paid history](docs/BILL-ENTRY-AND-HISTORY.md) for the guided entry and shared history screens.
 
+See [profiles, responsive layouts, and measured performance](docs/PROFILE-AND-PERFORMANCE.md) for account access, offline profiles, list pagination, and the fictional 2,000-bill benchmark.
+
 See [family workflows](docs/FAMILY-WORKFLOWS.md) for review/confirmation, shared settings, monthly lifecycle, filters, payer assignment, and upgrade instructions. CI also installs Chromium and runs real-browser regression checks.
 
 ## Remaining work
