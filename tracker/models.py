@@ -14,6 +14,7 @@ class SiteSettings(models.Model):
 
 
 class Loan(models.Model):
+    removed = models.BooleanField(default=False)
     title = models.CharField(max_length=100)
     total = models.DecimalField(max_digits=12, decimal_places=2)
     installments = models.PositiveSmallIntegerField()
@@ -52,7 +53,7 @@ class Bill(models.Model):
 
     @property
     def paid(self):
-        return sum((p.amount for p in self.payments.all()), Decimal('0.00'))
+        return sum((p.amount for p in self.payments.all() if not p.removed), Decimal('0.00'))
 
     @property
     def balance(self):
@@ -60,6 +61,7 @@ class Bill(models.Model):
 
 
 class Payment(models.Model):
+    removed = models.BooleanField(default=False)
     bill = models.ForeignKey(Bill, on_delete=models.PROTECT, related_name='payments')
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     paid_date = models.DateField()
@@ -109,6 +111,7 @@ class MutationReceipt(models.Model):
 
 class AuditContext(models.Model):
     """SQLite transaction context; written and cleared within the same write transaction."""
+    reason = models.CharField(max_length=500, blank=True, default="")
     id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
     actor_id = models.BigIntegerField(null=True)
     actor_name = models.CharField(max_length=150, blank=True)
@@ -125,6 +128,7 @@ class AuditQuerySet(models.QuerySet):
 
 
 class AuditEvent(models.Model):
+    reason = models.CharField(max_length=500, blank=True, default="")
     occurred_at = models.DateTimeField(default=timezone.now, db_index=True)
     actor_id = models.BigIntegerField(null=True)
     actor_name = models.CharField(max_length=150)

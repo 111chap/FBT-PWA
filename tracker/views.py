@@ -25,7 +25,7 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 from .models import Bill, Loan, Payment, Recurrence, SiteSettings, LoginFailure, PushSubscription, WorkerHeartbeat, AuditEvent
 from .services import money, next_month, validate_server_url, validate_push_endpoint, push_ready, send_push
 from .audit import trigger_status
-from .versions import bill_version, settings_version, recurrence_version
+from .versions import loan_version, payment_version, bill_version, settings_version, recurrence_version
 from .idempotency import idempotent
 
 User = get_user_model()
@@ -42,7 +42,7 @@ def api(view):
             return JsonResponse({'error': ' '.join(error.messages)}, status=400)
         except (ValueError, TypeError, KeyError, json.JSONDecodeError):
             return JsonResponse({'error': 'Some details are invalid. Check the form and try again.'}, status=400)
-        except (Bill.DoesNotExist, Recurrence.DoesNotExist, User.DoesNotExist):
+        except (Bill.DoesNotExist, Loan.DoesNotExist, Payment.DoesNotExist, Recurrence.DoesNotExist, User.DoesNotExist):
             return JsonResponse({'error': 'This record is no longer available.'}, status=404)
         except IntegrityError:
             return JsonResponse({'error': 'This record was just changed by another request. Refresh before retrying.'}, status=409)
@@ -198,11 +198,13 @@ def reachable(request):
 def snapshot(request):
     site = SiteSettings.objects.filter(pk=1).first() or SiteSettings()
     bills = []
+    loan_bills = {}
     for bill in Bill.objects.filter(removed=False).select_related('responsible', 'created_by').prefetch_related('payments__recorded_by'):
+        if bill.loan_id:loan_bills.setdefault(bill.loan_id,[]).append(bill)
         balance = bill.balance
         state = 'paid' if balance <= 0 else 'overdue' if bill.due_date < timezone.localdate() else 'partial' if bill.paid else 'upcoming'
-        bills.append({'version': bill_version(bill), 'responsible_id': bill.responsible_id, 'recurrence_id': bill.recurrence_id, 'id': bill.pk, 'title': bill.title, 'amount': str(bill.amount), 'balance': str(balance), 'due_date': bill.due_date.isoformat(), 'category': bill.category, 'notes': bill.notes, 'responsible': bill.responsible.username, 'status': state, 'loan_id': bill.loan_id, 'recurring': bool(bill.recurrence_id), 'payments': [{'amount': str(p.amount), 'paid_date': p.paid_date.isoformat(), 'recorded_by': p.recorded_by.username, 'recorded_by_id': p.recorded_by_id} for p in bill.payments.all()]})
-    return JsonResponse({'version': 1, 'synced_at': timezone.now().isoformat(), 'today': timezone.localdate().isoformat(), 'currency': 'PHP', 'settings_version': settings_version(site), 'recurrences': [{'id': r.pk, 'title': r.title, 'anchor_day': r.anchor_day, 'active': r.active, 'removed': r.removed, 'next_due': r.next_due.isoformat(), 'responsible_id': r.responsible_id, 'version': recurrence_version(r)} for r in Recurrence.objects.all()], 'family_name': site.family_name, 'nas_name': site.nas_name, 'server_url': site.server_url, 'user': {'id': request.user.pk, 'name': request.user.username, 'admin': request.user.is_superuser}, 'members': list(User.objects.filter(is_active=True).values('id', 'username')), 'bills': bills, 'loans': [{'id': loan.pk, 'title': loan.title, 'total': str(loan.total), 'installments': loan.installments} for loan in Loan.objects.all()], 'vapid_public_key': settings.VAPID_PUBLIC_KEY if push_ready() else ''})
+        bills.append({'version': bill_version(bill), 'responsible_id': bill.responsible_id, 'recurrence_id': bill.recurrence_id, 'id': bill.pk, 'title': bill.title, 'amount': str(bill.amount), 'balance': str(balance), 'due_date': bill.due_date.isoformat(), 'category': bill.category, 'notes': bill.notes, 'responsible': bill.responsible.username, 'status': state, 'loan_id': bill.loan_id, 'recurring': bool(bill.recurrence_id), 'payments': [{'id':p.pk,'version':payment_version(p),'amount': str(p.amount), 'paid_date': p.paid_date.isoformat(), 'recorded_by': p.recorded_by.username, 'recorded_by_id': p.recorded_by_id} for p in bill.payments.all() if not p.removed]})
+    return JsonResponse({'version': 1, 'synced_at': timezone.now().isoformat(), 'today': timezone.localdate().isoformat(), 'currency': 'PHP', 'settings_version': settings_version(site), 'recurrences': [{'id': r.pk, 'title': r.title, 'anchor_day': r.anchor_day, 'active': r.active, 'removed': r.removed, 'next_due': r.next_due.isoformat(), 'responsible_id': r.responsible_id, 'version': recurrence_version(r)} for r in Recurrence.objects.all()], 'family_name': site.family_name, 'nas_name': site.nas_name, 'server_url': site.server_url, 'user': {'id': request.user.pk, 'name': request.user.username, 'admin': request.user.is_superuser}, 'members': list(User.objects.filter(is_active=True).values('id', 'username')), 'bills': bills, 'loans': [{'id': loan.pk, 'title': loan.title, 'total': str(loan.total), 'installments': loan.installments,'version':loan_version(loan,loan_bills.get(loan.pk,[]))} for loan in Loan.objects.filter(removed=False)], 'vapid_public_key': settings.VAPID_PUBLIC_KEY if push_ready() else ''})
 
 
 @require_POST
@@ -447,7 +449,7 @@ def audit_history(request):
     if len(search) > 150:
         raise ValidationError('Use a shorter search term.')
     if search:
-        events = events.filter(Q(label__icontains=search) | Q(actor_name__icontains=search) | Q(transaction_id__icontains=search) | Q(entity_id__iexact=search) | Q(before__icontains=search) | Q(after__icontains=search))
+        events = events.filter(Q(label__icontains=search) | Q(actor_name__icontains=search) | Q(transaction_id__icontains=search) | Q(entity_id__iexact=search) | Q(reason__icontains=search) | Q(before__icontains=search) | Q(after__icontains=search))
     choices = {
         'entity_type': {'bill', 'payment', 'loan', 'recurrence', 'settings', 'account', 'access', 'device', 'reminder', 'system'},
         'action': {'insert', 'update', 'delete', 'started'},
@@ -477,6 +479,6 @@ def audit_history(request):
         raise ValidationError('Choose a valid page.')
     paginator = Paginator(events, 25)
     page = paginator.get_page(page_number)
-    fields = ['id', 'occurred_at', 'actor_id', 'actor_name', 'transaction_id', 'source', 'action', 'entity_type', 'entity_id', 'entity_table', 'label', 'before', 'after', 'credentials_changed']
+    fields = ['id', 'occurred_at', 'actor_id', 'actor_name', 'transaction_id', 'source', 'action', 'entity_type', 'entity_id', 'entity_table', 'label', 'before', 'after', 'credentials_changed','reason']
     started = AuditEvent.objects.filter(action='started', entity_type='system').order_by('id').values_list('occurred_at', flat=True).first()
     return JsonResponse({'events': list(page.object_list.values(*fields)), 'page': page.number, 'pages': paginator.num_pages, 'total': paginator.count, 'has_next': page.has_next(), 'has_previous': page.has_previous(), 'logging_started_at': started})

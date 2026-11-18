@@ -1,0 +1,11 @@
+.correction-actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.correction-actions .button{font-size:12px!important;min-height:44px}
+.family-app .danger-outline{color:var(--red);border-color:var(--red)}
+.correction-dialog{background:var(--surface);max-width:600px}
+.correction-dialog .impact{padding:14px 18px;background:var(--toffee-100);border-radius:12px;margin:18px 0;font-size:12px}
+.correction-dialog .impact p{margin:8px 0}
+.correction-dialog .impact ol{padding-left:20px;max-height:200px;overflow:auto}
+.correction-dialog .impact li{margin:8px 0;overflow-wrap:anywhere}
+#correction-record,#audit-detail-reason{overflow-wrap:anywhere}
+.family-app .destructive-dialog .primary{background:var(--danger-button);color:#fff;border-color:var(--danger-button)}
+.family-app .destructive-dialog .primary:hover{background:var(--danger-hover)}

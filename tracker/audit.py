@@ -7,7 +7,7 @@ from django.db import connection, transaction
 from .models import AuditContext
 
 _current = ContextVar('fbt_audit_transaction', default=None)
-FIELDS = ('actor_id', 'actor_name', 'transaction_id', 'source')
+FIELDS = ('actor_id', 'actor_name', 'transaction_id', 'source', 'reason')
 AUDITED_TABLES = ('tracker_bill', 'tracker_payment', 'tracker_loan', 'tracker_recurrence', 'tracker_sitesettings', 'auth_user', 'auth_user_groups', 'auth_user_user_permissions', 'auth_group', 'auth_group_permissions', 'tracker_pushsubscription', 'tracker_reminderdelivery')
 
 
@@ -46,7 +46,7 @@ def audit_transaction(actor=None, source='app'):
         return
     values = {'actor_id': actor.pk if actor and actor.is_authenticated else None,
               'actor_name': actor.username if actor and actor.is_authenticated else 'System',
-              'transaction_id': uuid.uuid4().hex, 'source': source}
+              'transaction_id': uuid.uuid4().hex, 'source': source, 'reason': ''}
     token = _current.set(values['transaction_id'])
     try:
         with transaction.atomic():
@@ -67,7 +67,7 @@ def audit_transaction(actor=None, source='app'):
                             for key in FIELDS:
                                 cursor.execute('SELECT set_config(%s, %s, true)', [f'fbt.audit_{key}', ''])
                     else:
-                        AuditContext.objects.filter(pk=1).update(actor_id=None, actor_name='', transaction_id='', source='')
+                        AuditContext.objects.filter(pk=1).update(actor_id=None, actor_name='', transaction_id='', source='', reason='')
     finally:
         _current.reset(token)
 
@@ -87,3 +87,12 @@ class AuditContextMiddleware:
             if response.status_code >= 400:
                 transaction.set_rollback(True)
             return response
+
+
+def correction_reason(reason):
+    """Set the reason inside the same outer audit transaction as the correction."""
+    if connection.vendor == 'postgresql':
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT set_config('fbt.audit_reason', %s, true)",[reason])
+    else:
+        AuditContext.objects.filter(pk=1).update(reason=reason)

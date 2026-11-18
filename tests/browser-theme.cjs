@@ -72,7 +72,7 @@ async function main(){
     }
     await page.goto(process.argv[2]+'/app/#setup');
     await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
-    await page.waitForFunction(async()=>{const c=await caches.open('fbt-shell-v15');return !!(await c.match('/static/fonts/dm-sans.ttf'));});
+    await page.waitForFunction(async()=>{const c=await caches.open('fbt-shell-v16');return !!(await c.match('/static/fonts/dm-sans.ttf'));});
     await page.locator('#enable-offline').click();
     await page.waitForFunction(()=>localStorage.getItem('fbt-offline-enabled')==='yes');
     await page.goto(process.argv[2]+'/app/#overview');await page.locator('#overview').waitFor();

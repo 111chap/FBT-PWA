@@ -5,7 +5,7 @@
     const previous = document.activeElement;
     const dialog = document.createElement('dialog');
     const simpleSignout = variant === 'signout';
-    dialog.className = 'review-dialog' + (simpleSignout ? ' signout-dialog' : '');
+    dialog.className = 'review-dialog' + (simpleSignout ? ' signout-dialog' : '') + (variant==='destructive'?' destructive-dialog':'');
     dialog.setAttribute('aria-labelledby', 'review-title');
     const heading = document.createElement('h2'); heading.id = 'review-title'; heading.textContent = title;
     const copy = document.createElement('p'); copy.textContent = note || 'Review these details before saving. Nothing has been saved yet.';
