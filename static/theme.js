@@ -3,7 +3,7 @@
   let theme='light';
   try {if(localStorage.getItem('fbt-theme')==='dark')theme='dark';}catch(_){/* Private browsing can disable storage. */}
   document.documentElement.dataset.theme=theme;
-  const chrome=()=>document.querySelectorAll('meta[name="theme-color"]').forEach(meta=>{meta.content=theme==='light'?'#FAF7F4':'#1A120D';});
+  const chrome=()=>document.querySelectorAll('meta[name="theme-color"]').forEach(meta=>{meta.content=theme==='light'?'#FAF7F4':'#1E1C1A';});
   chrome();
   document.addEventListener('DOMContentLoaded',()=>{
     const button=document.getElementById('theme-toggle');

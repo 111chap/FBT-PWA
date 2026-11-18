@@ -35,7 +35,7 @@ async function main(){
       await page.goto(process.argv[2]+'/app/#overview');await page.locator('#overview').waitFor();
       await page.emulateMedia({colorScheme:scheme});
       if(await page.evaluate(()=>document.documentElement.dataset.theme)!==scheme)await page.locator('#theme-toggle').click();
-      assert.equal(await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),scheme==='light'?'rgb(250, 247, 244)':'rgb(26, 18, 13)');
+      assert.equal(await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),scheme==='light'?'rgb(250, 247, 244)':'rgb(30, 28, 26)');
       for(const screen of ['overview','bills','loans','history','system','audit','setup']){
         await page.goto(process.argv[2]+'/app/#'+screen);await page.locator('#'+screen).waitFor();await page.evaluate(()=>document.fonts.ready);
         await readable('.sidebar nav a.active');await readable('#logout');await readable('#'+screen+' h1');
@@ -72,7 +72,7 @@ async function main(){
     }
     await page.goto(process.argv[2]+'/app/#setup');
     await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
-    await page.waitForFunction(async()=>{const c=await caches.open('fbt-shell-v17');return !!(await c.match('/static/fonts/dm-sans.ttf'));});
+    await page.waitForFunction(async()=>{const names=await caches.keys();for(const name of names.filter(n=>n.startsWith('fbt-shell-'))){const c=await caches.open(name);if(await c.match('/static/fonts/dm-sans.ttf'))return true;}return false;});
     await page.locator('#enable-offline').click();
     await page.waitForFunction(()=>localStorage.getItem('fbt-offline-enabled')==='yes');
     await page.goto(process.argv[2]+'/app/#overview');await page.locator('#overview').waitFor();

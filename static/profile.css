@@ -20,10 +20,10 @@
 html:has(body.family-app){overflow-x:clip}
 body.family-app{position:relative;overflow-x:clip;width:100%}
 @media(max-width:780px){
-  .family-app .topbar-right{max-width:200px}
-  .account-control{font-size:11px;min-height:44px;max-width:116px;padding:3px 6px;gap:5px}
-  #profile-toggle .avatar{width:24px;height:24px;font-size:10px}
-  #account-name{max-width:54px}
+  .family-app .topbar-right{max-width:none}
+  .account-control{font-size:13px;min-height:44px;max-width:180px;padding:5px 8px;gap:6px}
+  #profile-toggle .avatar{width:28px;height:28px;font-size:11px}
+  #account-name{max-width:120px}
   .account-caret{display:none}
   .profile-dialog{padding:22px}
   .record-pagination{flex-wrap:wrap;justify-content:center}
