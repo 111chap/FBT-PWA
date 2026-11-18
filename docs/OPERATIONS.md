@@ -95,7 +95,73 @@ This example assumes an empty destination. Verify account access, bills, payment
 
 ## Updates
 
-Back up first. Review dependency and migration changes, rebuild the project, and allow `init` to complete before the web and worker services start. After changing environment values, recreate containers through the project rebuild workflow. Check status and a notification test afterward. Keep the original `.env` and PostgreSQL volume; a new configuration file can break access to existing data or invalidate push registrations.
+The full setup guide includes a dedicated **07 · Update your app** walkthrough
+at `/setup-guide/#updates`, or `setup/index.html#updates` in a downloaded source
+folder. It covers Container Manager and equivalent NAS-terminal commands. Its
+colors and saved theme preference match the main family app.
+
+1. Choose a reviewed/merged version and read its migration notes. Ask the family
+   to pause writes, then stop `web` and `worker` while leaving `db` running for
+   the backup.
+2. Back up PostgreSQL and the existing `.env`; securely copy both off the NAS.
+   Retain the old app version and use a new backup filename for each update.
+3. Stop the remaining project containers and replace app source in the **same
+   project folder**. Preserve `.env`, the Compose project name, and the original
+   PostgreSQL volume. Updates do not reset users or regenerate secrets.
+4. In Container Manager, **Build** the existing project. Start `db` and wait for
+   healthy, start the newly built `init` and require exit code 0, then start
+   `web` and `worker`. Check a fresh init log, not a previous successful run.
+5. Check System status, existing accounts, bills, loan balances, paid history,
+   and a notification test. Refresh phones/saved copies while connected.
+
+For the terminal route, from the existing project folder after a successful
+backup and code replacement, start/check the database:
+
+~~~sh
+docker compose up -d db
+docker compose ps
+~~~
+
+Wait for healthy, then build the shared application image:
+
+~~~sh
+docker compose build web
+~~~
+
+Run migrations in a fresh one-off init container:
+
+~~~sh
+docker compose run --rm init
+~~~
+
+**Continue only if init succeeds with exit code 0.** Start the app services and
+check their status:
+
+~~~sh
+docker compose up -d web worker
+docker compose ps -a
+~~~
+
+These are separate steps: stop on any failed command. Compose recreates changed
+service images/configuration while retaining mounted volumes. Do not remove
+volumes as part of an update.
+
+After an `.env` change, rebuild/recreate the app containers so they load the new
+settings. Keep existing secrets and database credentials unless deliberately
+rotating them with the corresponding server changes. A PostgreSQL major-version
+change requires its own database-upgrade plan.
+
+If first-time setup unexpectedly reappears, stop `web`/`worker` and verify
+the original project, configuration, and volume before creating another admin.
+If migrations fail, keep the app stopped and inspect the logs. Rolling back app
+files alone may be unsafe after a migration: use the matching application version
+and complete database backup, first testing restoration in isolation with the
+reminder worker disabled.
+
+Reference: [Synology Project actions](https://kb.synology.com/en-global/DSM/help/ContainerManager/docker_project),
+[Compose image/configuration updates](https://docs.docker.com/reference/cli/docker/compose/up/),
+and [one-off init runs](https://docs.docker.com/reference/cli/docker/compose/run/).
+
 
 ## Before trusting real records
 
