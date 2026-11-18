@@ -4,7 +4,9 @@ async function main() {
   const browser=await chromium.launch({headless:true,...(process.env.FBT_BROWSER_EXECUTABLE ? {executablePath:process.env.FBT_BROWSER_EXECUTABLE} : {})});
   const page=await browser.newPage();
   try {
-    const base=process.argv[2];await page.goto(base+'/setup/');
+    const base=process.argv[2];await page.emulateMedia({colorScheme:'dark'});await page.goto(base+'/setup/');
+    assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'light');
+    assert.equal(await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(250, 247, 244)');
     await page.locator('[name=token]').fill('fictional-first-run-code-123');await page.locator('[name=family_name]').fill('Fictional QA family');
     await page.locator('[name=username]').fill('qa-first-admin');await page.locator('[name=password]').fill('Fictional-first-admin-passphrase-123!');
     await page.locator('form button').click();await page.locator('.review-dialog').waitFor();

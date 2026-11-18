@@ -16,6 +16,15 @@ import uuid
 @skipUnless(os.getenv('FBT_BROWSER_TESTS') == '1', 'Set FBT_BROWSER_TESTS=1 to run real-browser checks.')
 @override_settings(SECURE_SSL_REDIRECT=False, SESSION_COOKIE_SECURE=False, CSRF_COOKIE_SECURE=False, ALLOWED_HOSTS=['localhost','127.0.0.1','testserver'])
 class BrowserWorkflowTests(StaticLiveServerTestCase):
+    def test_public_themes_and_modification_buttons(self):
+        admin=get_user_model().objects.create_superuser('qa-admin',password='Fictional-QA-passphrase-123!')
+        loan=Loan.objects.create(title='Fictional repayment',total='100',installments=1,created_by=admin)
+        for title,parent,paid in [('Unpaid utility',None,False),('Paid utility',None,True),('Loan installment',loan,False)]:
+            bill=Bill.objects.create(title=title,amount='100',due_date=timezone.localdate(),responsible=admin,created_by=admin,loan=parent)
+            if paid:Payment.objects.create(bill=bill,amount='100',paid_date=timezone.localdate(),recorded_by=admin,request_key=uuid.uuid4())
+        result=subprocess.run([shutil.which('node'),str(settings.BASE_DIR/'tests/browser-ui-consistency.cjs'),self.live_server_url],cwd=settings.BASE_DIR,text=True,encoding='utf-8',capture_output=True,timeout=120)
+        self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
+
     def test_admin_financial_corrections(self):
         admin=get_user_model().objects.create_superuser('qa-admin',password='Fictional-QA-passphrase-123!')
         member=get_user_model().objects.create_user('qa-member',password='Fictional-QA-passphrase-123!')

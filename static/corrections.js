@@ -2,15 +2,19 @@
 (() => {
   const $=id=>document.getElementById(id),dialog=$('correction-dialog'),form=$('correction-form');
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  let data=null,online=false,config=null,selected=null,retry=null,busy=false;
+  let data=null,online=false,config=null,selected=null,retry=null,busy=false,blockedReason='';
   const allowed=()=>data?.user.admin&&online;
-  const syncButtons=()=>{document.querySelectorAll('.financial-correction').forEach(button=>button.disabled=!allowed()||busy);form.querySelector('[type=submit]').disabled=!allowed()||busy;};
+  const syncButtons=()=>{
+    document.querySelectorAll('.financial-correction,#detail-actions .reassign-payer').forEach(button=>button.disabled=!allowed()||busy);
+    form.querySelector('[type=submit]').disabled=!allowed()||busy;
+    const status=$('detail-action-status');if(status){status.textContent=busy?'Saving changes…':blockedReason;status.hidden=!data?.user.admin||(!busy&&!blockedReason);}
+  };
   const money=value=>`PHP ${Number(value).toFixed(2)}`;
   const fields=$('correction-fields');
   const input=(name,title,value,type='text')=>`<label>${title}<input name="${name}" type="${type}" value="${esc(value)}" ${type==='number'?'min="0.01" max="9999999999.99" step="0.01" inputmode="decimal"':type==='text'?'maxlength="100"':''} required></label>`;
   window.FBTCorrections={
     configure(value){config=value;},
-    update(value,connected,pending){data=value;online=connected&&!pending;syncButtons();},
+    update(value,connected,pending){data=value;online=connected&&!pending;blockedReason=!connected?'Viewing saved records. Connect to your home server, close this window, and refresh before making changes.':pending?'Close this window and refresh your family records before making changes.':'';syncButtons();},
     controls(kind,id){return data?.user.admin?`<span class="correction-actions"><button type="button" class="button secondary financial-correction" data-kind="${kind}" data-record="${id}" data-action="edit" ${!allowed()?'disabled':''}>Edit ${kind}</button><button type="button" class="button secondary danger-outline financial-correction" data-kind="${kind}" data-record="${id}" data-action="delete" ${!allowed()?'disabled':''}>Delete ${kind}</button></span>`:'';}
   };
   function preview(){

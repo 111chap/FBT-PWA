@@ -213,7 +213,7 @@
   function showDetailActions(bill) {
     const recurrence = (data.recurrences || []).find(r=>r.id===bill.recurrence_id);
     $('detail-recurrence').textContent = recurrence ? `Monthly: day ${recurrence.anchor_day} (last valid day in shorter months). Schedule ${recurrence.active ? 'active' : 'cancelled'}.` : '';
-    $('detail-actions').innerHTML = data.user.admin ? `<button class="button secondary reassign-payer" data-id="${bill.id}" data-online>Change primary payer</button>${FBTCorrections.controls('bill',bill.id)}` : '';
+    $('detail-actions').innerHTML = data.user.admin ? `<button class="button secondary reassign-payer" data-id="${bill.id}" data-online aria-label="Change primary payer">Change payer</button>${FBTCorrections.controls('bill',bill.id)}` : '';
     setConnection(connected);
   }
   document.addEventListener('click',async event=> {

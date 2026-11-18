@@ -1,0 +1,24 @@
+/* Shared family-facing account surfaces; Django administration is unchanged. */
+.auth-body{background:var(--cream-50);font-family:var(--font-ui);font-optical-sizing:auto}
+.auth-card{background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:0 5px 24px #2b1d1408}
+.auth-card .brand-mark{background:var(--toffee-500);color:var(--brand-label);border-radius:16px;box-shadow:0 4px 12px #9e62351a}
+.auth-card h1{font-weight:650;letter-spacing:-.045em}
+.auth-card .eyebrow{color:var(--toffee-600)}
+.auth-card input{background:var(--surface);border-color:var(--control-border);border-radius:12px}
+.auth-card .button{min-height:46px;border-radius:13px;font-size:13px;font-weight:600}
+.auth-theme-toggle{position:fixed;top:20px;right:20px;display:grid;place-items:center;width:44px;height:44px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--toffee-600);font:22px var(--font-ui);z-index:2}
+.auth-theme-toggle:hover{background:var(--toffee-100)}
+.auth-body .review-dialog{background:var(--surface);color:var(--ink);border-color:var(--line);font-family:var(--font-ui);border-radius:22px}
+.auth-body .review-dialog .primary{background:var(--toffee-500);border-color:var(--toffee-500);color:var(--brand-label)}
+.auth-body .review-dialog .secondary{background:var(--surface);border-color:var(--control-border);color:var(--ink)}
+.auth-body .review-dialog .primary:hover{background:var(--toffee-600);border-color:var(--toffee-600)}
+.auth-body .review-dialog .secondary:hover{background:var(--toffee-100)}
+.auth-body .review-dialog :focus-visible{outline-color:var(--focus)}
+.setup-guide{background:var(--cream-50);color:var(--ink)}
+.setup-guide .step{background:var(--surface)}
+.setup-guide .guide-nav{background:var(--sidebar)}
+.setup-guide .callout,.setup-guide .number,.setup-guide .pill{background:var(--toffee-100)}
+.setup-guide form{background:var(--surface)}
+.setup-guide input{background:var(--surface);color:var(--ink)}
+.setup-guide #env-form button{border-radius:13px;box-shadow:0 4px 10px #9e62351a}
+@media(max-width:600px){.auth-body{padding-top:80px;padding-bottom:24px}.auth-theme-toggle{top:16px;right:16px}.auth-card{padding:26px}}
