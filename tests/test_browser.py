@@ -16,6 +16,12 @@ import uuid
 @skipUnless(os.getenv('FBT_BROWSER_TESTS') == '1', 'Set FBT_BROWSER_TESTS=1 to run real-browser checks.')
 @override_settings(SECURE_SSL_REDIRECT=False, SESSION_COOKIE_SECURE=False, CSRF_COOKIE_SECURE=False, ALLOWED_HOSTS=['localhost','127.0.0.1','testserver'])
 class BrowserWorkflowTests(StaticLiveServerTestCase):
+    def test_mobile_navigation_geometry_and_readable_header(self):
+        get_user_model().objects.create_superuser('qa-admin', password='Fictional-QA-passphrase-123!')
+        SiteSettings.objects.create(family_name='A fictional household with a longer display name')
+        result = subprocess.run([shutil.which('node'), str(settings.BASE_DIR/'tests/browser-mobile-navigation.cjs'), self.live_server_url], cwd=settings.BASE_DIR, text=True, encoding='utf-8', capture_output=True, timeout=150)
+        self.assertEqual(result.returncode, 0, result.stdout+'\n'+result.stderr)
+
     def test_public_themes_and_modification_buttons(self):
         admin=get_user_model().objects.create_superuser('qa-admin',password='Fictional-QA-passphrase-123!')
         loan=Loan.objects.create(title='Fictional repayment',total='100',installments=1,created_by=admin)
