@@ -2,3 +2,72 @@
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:25px}body{margin:0;background:var(--cream-50);font:15px/1.7 var(--font-ui);color:var(--ink)}header{display:flex;justify-content:space-between;align-items:center;padding:26px 6vw;border-bottom:1px solid var(--line)}.wordmark{font-size:33px;color:var(--toffee-600);text-decoration:none;font-weight:800}.wordmark span{font-size:13px;font-weight:650;margin-left:12px;letter-spacing:0}.pill{font-size:10px;letter-spacing:1px;padding:6px 11px;background:var(--toffee-100);border-radius:30px;color:var(--muted)}main{max-width:1120px;margin:auto;padding:0 30px}.intro{padding:65px 0 45px;max-width:760px}.eyebrow{font-size:10px;letter-spacing:2px;color:var(--muted);font-weight:700}h1{font-size:clamp(34px,5vw,59px);line-height:1.13;letter-spacing:-2px;margin:20px 0}h2{font-size:25px;letter-spacing:-.7px;margin:5px 0 14px}h3{font-size:17px;margin:25px 0 8px}p{margin:0 0 16px}.intro>p:not(.eyebrow){color:var(--muted);font-size:17px}.callout{background:var(--toffee-100);border:1px solid var(--line);padding:20px 23px;border-radius:13px;margin:25px 0}.callout p{font-size:13px;margin:8px 0 0;color:var(--muted)}.guide-layout{display:grid;grid-template-columns:240px 1fr;gap:40px;align-items:start}nav{position:sticky;top:25px;display:grid;gap:8px;font-size:12px}nav a{padding:9px 12px;color:var(--green);text-decoration:none;border-left:2px solid var(--control-border)}nav a:hover{background:var(--hover)}.step{padding:30px;background:var(--surface);border:1px solid var(--line);border-radius:18px;margin-bottom:25px}.number{display:inline-grid;place-items:center;background:var(--toffee-100);border-radius:8px;padding:4px 11px;font-size:12px;font-weight:bold;margin-bottom:13px}li{padding-left:7px;margin-bottom:15px}ol,ul{padding-left:21px}.hint,small{color:var(--muted);font-size:12px}code{font-size:12px;background:var(--toffee-100);padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}form{border:1px solid var(--line);padding:22px;border-radius:12px;margin:22px 0}label{display:block;font-size:13px;font-weight:600;margin-bottom:19px}input{display:block;width:100%;padding:12px;border:1px solid var(--control-border);border-radius:8px;font:inherit;margin-top:6px}small{display:block;font-weight:400;margin-top:6px}.check{display:flex;gap:10px;font-weight:400;line-height:1.5}.check input{width:18px;height:18px;flex-shrink:0;margin:0}button{background:var(--toffee-500);color:var(--brand-label);border:0;border-radius:8px;padding:12px 18px;font:600 13px var(--font-ui);cursor:pointer}button:disabled{opacity:.5}details{border-top:1px solid var(--line);padding:15px 0}summary{cursor:pointer;font-weight:600;font-size:14px}details p{color:var(--muted);font-size:13px;margin:12px 0}footer{padding:45px 25px;text-align:center;color:var(--muted);font-size:11px}#env-result{font-size:12px;margin-top:15px;color:var(--green);overflow-wrap:anywhere}:focus-visible{outline:3px solid var(--focus);outline-offset:3px}@media(max-width:750px){header{padding:20px}.wordmark span{font-size:11px}.pill{font-size:8px}main{padding:0 18px}.intro{padding:35px 0 20px}.guide-layout{grid-template-columns:1fr;gap:20px}nav{position:static;grid-template-columns:1fr 1fr;gap:3px}.step{padding:23px}form{padding:17px}h2{font-size:23px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 
 input{background:var(--surface);color:var(--ink)}input::placeholder{color:var(--muted);opacity:1}a,#env-result{color:var(--toffee-600)}button:hover{background:var(--toffee-600)}
+
+/* Family app palette: cream canvas, soft toffee navigation, rounded surfaces. */
+body{font-optical-sizing:auto}
+header{gap:18px;flex-wrap:wrap;padding:24px max(24px,calc((100% - 1120px)/2));background:var(--cream-50)}
+.wordmark{display:flex;align-items:center;gap:12px;color:var(--ink);font-size:15px;font-weight:600;line-height:1.3}
+.wordmark .guide-mark{display:grid;place-items:center;width:46px;height:46px;margin:0;border-radius:16px;background:var(--toffee-500);color:var(--brand-label);font-size:29px;letter-spacing:-3px;padding-right:3px;font-weight:750;box-shadow:0 4px 12px #9e62351a;flex-shrink:0}
+.wordmark .guide-brand{font-size:15px;margin:0;letter-spacing:0}
+.wordmark .guide-brand small{font-size:11px;font-weight:400;margin-top:4px;color:var(--muted)}
+.guide-tools{display:flex;align-items:center;gap:12px}
+.pill{background:var(--toffee-100);color:var(--muted);font-size:9px;padding:7px 12px;font-weight:550}
+.guide-theme-toggle{display:grid;place-items:center;width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--toffee-600);font-size:21px;line-height:1}
+.guide-theme-toggle:hover{background:var(--toffee-100)}
+.intro{padding:52px 0 38px;max-width:780px}
+h1{font-weight:650;letter-spacing:-.045em;line-height:1.15}
+h2{font-size:25px;font-weight:600;letter-spacing:-.025em}
+h3{font-weight:600;line-height:1.4}
+.eyebrow{color:var(--toffee-600);letter-spacing:1.6px}
+.guide-button{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:12px 18px;background:var(--toffee-500);color:var(--brand-label);border-radius:13px;font-size:13px;font-weight:600;text-decoration:none;box-shadow:0 4px 10px #9e62351a}
+.guide-button:hover{background:var(--toffee-600)}
+.guide-layout{grid-template-columns:240px minmax(0,1fr);gap:28px}
+.guide-nav{padding:14px;background:var(--sidebar);border:1px solid var(--line);border-radius:22px;gap:6px;max-height:calc(100dvh - 50px);overflow:auto}
+.guide-nav a{display:flex;align-items:center;min-height:44px;padding:10px 12px;border:0;border-radius:12px;color:var(--muted);font-size:12px;font-weight:550}
+.guide-nav a:hover{background:var(--sidebar-hover);color:var(--ink)}
+.guide-nav .update-link{background:var(--surface);color:var(--toffee-600);border:1px solid var(--line)}
+body:has(#updates:target) .guide-nav .update-link{background:var(--toffee-500);color:var(--brand-label)}
+.step{min-width:0;border-radius:22px;box-shadow:0 5px 18px #2b1d1405;scroll-margin-top:24px}
+.number{background:var(--toffee-100);color:var(--toffee-600);border-radius:10px;padding:6px 12px}
+.callout{border-radius:16px}
+.callout ul{font-size:13px;margin:12px 0 0}
+.callout li{margin-bottom:10px}
+form{border-radius:18px;background:var(--cream-50)}
+input{border-radius:12px;min-height:44px;min-width:0}
+button{border-radius:13px;min-height:46px}
+summary{min-height:44px;align-content:center;padding:6px 0;color:var(--toffee-600)}
+.update-steps{padding-left:22px;margin:22px 0}
+.update-steps>li{padding:0 0 12px 6px;margin-bottom:22px;border-bottom:1px solid var(--line)}
+.update-steps h3{font-size:17px;margin:0 0 12px}
+.update-steps p{font-size:14px;overflow-wrap:anywhere}
+.update-steps details{margin-top:12px}
+.update-steps details p{font-size:13px}
+pre{max-width:100%;overflow:auto;background:var(--toffee-100);border:1px solid var(--line);padding:14px;border-radius:12px;font-size:12px;line-height:1.7}
+pre code{padding:0;background:transparent;overflow-wrap:normal}
+.skip-guide{position:absolute;left:16px;top:-100px;background:var(--surface);padding:12px;border-radius:10px;z-index:5}
+.skip-guide:focus{top:12px}
+@media(max-width:750px){
+  header{padding:20px 18px;gap:12px}
+  .guide-tools{gap:8px}
+  .wordmark .guide-mark{width:40px;height:40px;font-size:26px;border-radius:13px}
+  .wordmark .guide-brand{font-size:13px}
+  .wordmark .guide-brand small{font-size:10px}
+  .pill{font-size:8px;padding:6px 9px}
+  .guide-theme-toggle{width:40px;height:40px;min-width:40px;min-height:40px}
+  main{padding:0 18px}
+  .intro{padding:32px 0 26px}
+  .intro>p:not(.eyebrow){font-size:15px}
+  h1{font-size:clamp(32px,8vw,44px)}
+  .guide-button{width:100%;text-align:center}
+  .guide-layout{grid-template-columns:minmax(0,1fr);gap:20px}
+  .guide-nav{grid-template-columns:minmax(0,1fr) minmax(0,1fr);max-height:none;padding:10px;gap:4px;overflow:visible}
+  .guide-nav a{font-size:11px;padding:10px 8px;overflow-wrap:anywhere}
+  .step{padding:22px 18px}
+  h2{font-size:23px}
+  .callout{padding:18px}
+  form{padding:16px}
+  #env-form button{width:100%;white-space:normal}
+  .update-steps{padding-left:18px}
+  .update-steps>li{padding-left:2px}
+  footer{padding:26px 18px;font-size:10px}
+}
