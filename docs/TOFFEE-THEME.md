@@ -17,9 +17,10 @@ there are no Google Fonts requests or other font services at runtime.
 - Font license: [SIL Open Font License](../static/fonts/OFL.txt), included with the font.
 - Shared tokens and font declaration: `static/fonts.css`.
 - The family app, confirmations, and NAS guide consume shared tokens.
-- The main family app defaults to light cream, with an optional light/dark
-  toggle whose device-local preference works offline. Account/guide screens
-  follow the device preference. Django administration retains its original
+- The main family app, login, first-account setup, and NAS guide default to
+  light cream and share the same optional light/dark choice on the same origin.
+  Public account surfaces use `static/public-theme.css`; device dark mode does
+  not silently override the saved choice. Django administration retains its original
   colors, fonts, and theme selector; it does not load family theme assets.
 - Browser chrome follows the chosen app theme; installed app icons use toffee
   and cream. Installers may cache their icon or initial splash color until the

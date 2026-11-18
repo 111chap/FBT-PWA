@@ -7,6 +7,12 @@ Ordinary members do not receive these controls, and the server independently
 enforces administrator access. All corrections require a live connection and a
 freshly reviewed version of the record and its relevant parent records.
 
+Modification buttons share consistent sizing and spacing, stacking on smaller
+screens. The visible **Change payer** action retains the accessible name
+**Change primary payer**. Disabled controls stay readable, with an explanation
+when the device is offline or a refresh is required. These visual changes do
+not enable unavailable actions or alter authorization/confirmation rules.
+
 ## Editable details
 
 | Record | Editable fields | Accounting effect |

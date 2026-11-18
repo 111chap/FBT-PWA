@@ -1,5 +1,14 @@
-.correction-actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
-.correction-actions .button{font-size:12px!important;min-height:44px}
+.correction-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0 0}
+#detail-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:stretch;margin:18px 0 12px}
+#detail-actions:has(.reassign-payer){grid-template-columns:repeat(3,minmax(0,1fr))}
+#detail-actions .correction-actions{display:contents}
+.family-app #detail-actions .button,.family-app #detail-payments .correction-actions .button{display:flex;align-items:center;justify-content:center;width:100%;min-height:46px;padding:10px 12px;border-radius:12px;font-size:13px;font-weight:600;line-height:1.4;white-space:normal;overflow-wrap:anywhere;margin:0}
+#detail-payments .activity>div:first-child{flex:1;min-width:0}
+.family-app #detail-actions .button:disabled,.family-app #detail-payments .financial-correction:disabled{opacity:1;background:var(--toffee-100);color:var(--muted);border-color:var(--line);box-shadow:none;cursor:not-allowed}
+#detail-action-status{margin:0 0 18px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--toffee-100);color:var(--muted);font-size:12px}
+.family-app #payer-dialog .button-row{display:grid;grid-template-columns:minmax(0,1fr)}
+.family-app #payer-dialog .button{min-height:46px;padding:10px 12px;border-radius:12px;font-size:13px;font-weight:600}
+@media(max-width:480px){#detail-actions,#detail-actions:has(.reassign-payer),.correction-actions{grid-template-columns:minmax(0,1fr)}}
 .family-app .danger-outline{color:var(--red);border-color:var(--red)}
 .correction-dialog{background:var(--surface);max-width:600px}
 .correction-dialog .impact{padding:14px 18px;background:var(--toffee-100);border-radius:12px;margin:18px 0;font-size:12px}

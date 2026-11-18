@@ -26,7 +26,7 @@ async function main(){
     await page.evaluate(()=>document.fonts.ready);
     assert.ok(await page.evaluate(()=>document.fonts.check('15px "DM Sans"')));
     for(const scheme of ['light','dark']){
-      await page.emulateMedia({colorScheme:scheme});await readable('.primary');await readable('.muted');
+      await page.emulateMedia({colorScheme:scheme});if(await page.evaluate(()=>document.documentElement.dataset.theme)!==scheme)await page.locator('#theme-toggle').click();await readable('.primary');await readable('.muted');
       await page.screenshot({path:`tmp/browser-qa/toffee-${scheme}-login.png`,fullPage:true});
     }
     await page.emulateMedia({colorScheme:'light'});
@@ -72,7 +72,7 @@ async function main(){
     }
     await page.goto(process.argv[2]+'/app/#setup');
     await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
-    await page.waitForFunction(async()=>{const c=await caches.open('fbt-shell-v16');return !!(await c.match('/static/fonts/dm-sans.ttf'));});
+    await page.waitForFunction(async()=>{const c=await caches.open('fbt-shell-v17');return !!(await c.match('/static/fonts/dm-sans.ttf'));});
     await page.locator('#enable-offline').click();
     await page.waitForFunction(()=>localStorage.getItem('fbt-offline-enabled')==='yes');
     await page.goto(process.argv[2]+'/app/#overview');await page.locator('#overview').waitFor();
