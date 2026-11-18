@@ -571,7 +571,13 @@
     try { pushSupported(); const registration = await navigator.serviceWorker.ready; const subscription = await registration.pushManager.getSubscription(); if(subscription) { await api('/api/push/',{method:'DELETE',body:JSON.stringify({endpoint:subscription.endpoint})}); await subscription.unsubscribe(); } toast('Notifications disabled on this device.'); }
     catch(exception) { error(exception.message); }
   });
-  $('test-push').addEventListener('click',async () => { try { const result = await api('/api/push/test/',{method:'POST',body:'{}'}); toast(result.note); } catch(exception) { error(exception.message); } });
+  $('test-push').addEventListener('click',async () => {
+    const button = $('test-push'), status = $('push-test-status');
+    button.disabled = true; status.textContent = 'Sending a test…';
+    try { const result = await api('/api/push/test/',{method:'POST',body:'{}'}); status.textContent = result.note; toast(result.note); }
+    catch(exception) { status.textContent = exception.message; error(exception.message); }
+    finally { button.disabled = !connected || pendingRefresh; }
+  });
   window.addEventListener('hashchange',route);
   window.addEventListener('online',probe);
   window.addEventListener('offline',() => setConnection(false));

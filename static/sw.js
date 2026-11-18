@@ -1,5 +1,5 @@
 /* Cache only the public shell. Authenticated responses and API data are never cached here. */
-const SHELL_CACHE = 'fbt-shell-mobile-v1';
+const SHELL_CACHE = 'fbt-shell-v19';
 const ASSETS = ['/app/', '/static/app.css', '/static/family-theme.css', '/static/theme.js', '/static/fonts.css', '/static/fonts/dm-sans.ttf', '/static/app.js', '/static/corrections.js', '/static/corrections.css', '/static/correction-plan.js', '/static/profile.js', '/static/profile.css', '/static/review.js', '/static/review.css', '/static/record-filters.js', '/static/offline-store.js', '/static/icon.svg', '/static/icon-180.png', '/static/icon-192.png', '/static/icon-512.png', '/static/manifest.webmanifest'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(SHELL_CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
