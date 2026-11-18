@@ -19,6 +19,7 @@ const base=process.argv[2];
     fs.mkdirSync('tmp/browser-qa',{recursive:true});await page.screenshot({path:'tmp/browser-qa/matching-login.png'});
     await page.locator('[name=username]').fill('qa-admin');await page.locator('[name=password]').fill('Fictional-QA-passphrase-123!');await page.locator('form button').click();await page.locator('#overview').waitFor();assert.equal(await theme(),'light');
     await page.goto(base+'/app/#setup');
+    await page.waitForFunction(()=>document.getElementById('connection-badge').textContent.includes('Home server connected'));
     const pushNote='Push service accepted the test for 1 registered device(s). Removed 1 expired registration(s).';
     await page.route('**/api/push/test/',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,accepted:1,expired:1,failed:0,note:pushNote})}));
     await page.locator('#test-push').click();
