@@ -431,12 +431,30 @@ def test_push(request):
     subscriptions = PushSubscription.objects.filter(user=request.user)
     if not subscriptions.exists():
         return JsonResponse({'error': 'Enable notifications on this device first.'}, status=409)
-    try:
-        for subscription in subscriptions:
+    accepted = expired = failed = 0
+    for subscription in subscriptions.order_by('pk'):
+        try:
             send_push(subscription, 'Your reminders are connected', 'This is a test from Family Bill Tracker.')
-    except Exception:
-        return JsonResponse({'error': 'Push service did not accept the test. Check worker logs and keys.'}, status=502)
-    return JsonResponse({'ok': True, 'note': 'Push service accepted the test. Confirm that you received it on your phone.'})
+            accepted += 1
+        except Exception as exception:
+            response = getattr(exception, 'response', None)
+            if response is not None and response.status_code in (404, 410):
+                # The request's audit transaction commits cleanup and its log together.
+                subscription.delete()
+                expired += 1
+            else:
+                failed += 1
+    if accepted:
+        note = f'Push service accepted the test for {accepted} registered device(s). Confirm receipt on your phone.'
+    else:
+        note = 'No test notifications were accepted.'
+    if expired:
+        note += f' Removed {expired} expired registration(s). Enable notifications again on any device that no longer receives them.'
+    if failed:
+        note += f' Sending failed for {failed} registration(s). Retry the test; if it persists, ask the administrator to check push configuration and NAS internet access.'
+    # A completed batch returns its outcomes even when none were accepted. Returning
+    # 4xx/5xx would roll back expired-device cleanup in AuditContextMiddleware.
+    return JsonResponse({'ok': bool(accepted), 'accepted': accepted, 'expired': expired, 'failed': failed, 'note': note})
 
 
 @require_GET

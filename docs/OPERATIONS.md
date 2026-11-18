@@ -58,6 +58,17 @@ Logs should not include bills, credentials, or subscription endpoints. Remove se
 
 ## Reminders and recurrence
 
+The **Send a test** action tries each registration belonging to the signed-in account.
+Registrations rejected by the provider with HTTP 404 or 410 are expired and are
+removed in the same transaction as their audit logs. Other failures retain the
+registration and do not stop attempts to the remaining devices. The result beside
+the test button reports accepted, expired, and failed registrations. Provider
+acceptance still requires checking that the phone actually displays a notification.
+A completed batch returns HTTP 200 even if no device accepted it, so expired-device
+cleanup can commit; the response's `ok` and counts describe the delivery outcomes.
+This update requires no database migration or key rotation. Use the usual database
+and `.env` backup procedure before rebuilding existing NAS containers.
+
 The worker runs roughly every minute. It generates monthly fixed-amount bills up to 30 days ahead, retaining the original day-of-month anchor through short months. For variable-amount bills, add each occurrence manually for now.
 
 Notifications are sent at most once per bill per subscription per Manila calendar day, between 09:00 and 20:00, starting three days before the due date and continuing while unpaid. Temporary failures retry up to three times that day. Confirm a device test after subscription. There is no configurable quiet-hour or per-bill recipient UI yet.
