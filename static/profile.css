@@ -15,7 +15,9 @@
 .record-pagination span{text-align:center}
 .record-pagination button{min-width:90px}
 .family-app .topbar{position:sticky;top:0;z-index:3}
-.family-app .page{scroll-margin-top:calc(var(--header-height,100px) + 16px)}
+.family-app .page{scroll-margin-top:calc(var(--header-height,100px) + var(--emergency-height,0px) + 16px)}
+.family-app #emergency-banner{position:sticky;top:var(--header-height,100px);z-index:4;margin:0;border-radius:0;padding:12px 20px;font-size:13px;overflow-wrap:anywhere}
+#privacy-history-list p{overflow-wrap:anywhere;padding-block:8px;border-bottom:1px solid var(--line)}
 /* Wide record tables scroll in their own containers, never across the page. */
 html:has(body.family-app){overflow-x:clip}
 body.family-app{position:relative;overflow-x:clip;width:100%}

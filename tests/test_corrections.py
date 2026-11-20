@@ -66,7 +66,7 @@ class CorrectionTests(TestCase):
         data=self.payload(action='delete');self.client.force_login(self.member)
         self.assertEqual(self.post('bill',data).status_code,403)
         self.assertEqual(self.post('payment',data).status_code,403)
-        self.assertEqual(self.post('loan',data,obj=self.bill).status_code,403)
+        self.assertIn(self.post('loan',data,obj=self.bill).status_code,(403,404))
         self.client.force_login(self.admin)
         for key,value in [('confirmed',False),('reason',''),('request_key','')]:
             invalid={**data,key:value};self.assertEqual(self.post('bill',invalid).status_code,400)

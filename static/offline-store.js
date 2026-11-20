@@ -3,7 +3,7 @@
   const DB = 'fbt-private-offline-v1';
   const MAX_AGE = 7 * 24 * 60 * 60 * 1000;
   function validateSnapshot(value, userId = null, now = Date.now()) {
-    if (!value || value.version !== 1 || !value.user || !Number.isInteger(value.user.id) || !Array.isArray(value.bills)) return false;
+    if (!value || value.offline_safe===false || value.emergency || value.version !== 1 || !value.user || !Number.isInteger(value.user.id) || !Array.isArray(value.bills)) return false;
     if (userId !== null && value.user.id !== userId) return false;
     const synced = Date.parse(value.synced_at);
     return Number.isFinite(synced) && synced <= now + 60000 && now - synced <= MAX_AGE;

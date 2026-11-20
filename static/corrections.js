@@ -3,7 +3,7 @@
   const $=id=>document.getElementById(id),dialog=$('correction-dialog'),form=$('correction-form');
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let data=null,online=false,config=null,selected=null,retry=null,busy=false,blockedReason='';
-  const allowed=()=>data?.user.admin&&online;
+  const allowed=()=>online&&!data?.emergency;
   const syncButtons=()=>{
     document.querySelectorAll('.financial-correction,#detail-actions .reassign-payer').forEach(button=>button.disabled=!allowed()||busy);
     form.querySelector('[type=submit]').disabled=!allowed()||busy;
@@ -15,7 +15,7 @@
   window.FBTCorrections={
     configure(value){config=value;},
     update(value,connected,pending){data=value;online=connected&&!pending;blockedReason=!connected?'Viewing saved records. Connect to your home server, close this window, and refresh before making changes.':pending?'Close this window and refresh your family records before making changes.':'';syncButtons();},
-    controls(kind,id){return data?.user.admin?`<span class="correction-actions"><button type="button" class="button secondary financial-correction" data-kind="${kind}" data-record="${id}" data-action="edit" ${!allowed()?'disabled':''}>Edit ${kind}</button><button type="button" class="button secondary danger-outline financial-correction" data-kind="${kind}" data-record="${id}" data-action="delete" ${!allowed()?'disabled':''}>Delete ${kind}</button></span>`:'';}
+    controls(kind,id){const record=kind==='loan'?data?.loans.find(r=>r.id===id):kind==='bill'?data?.bills.find(r=>r.id===id):data?.bills.find(r=>r.payments.some(p=>p.id===id));return record?.can_manage&&!data?.emergency?`<span class="correction-actions"><button type="button" class="button secondary financial-correction" data-kind="${kind}" data-record="${id}" data-action="edit" ${!allowed()?'disabled':''}>Edit ${kind}</button><button type="button" class="button secondary danger-outline financial-correction" data-kind="${kind}" data-record="${id}" data-action="delete" ${!allowed()?'disabled':''}>Delete ${kind}</button></span>`:'';}
   };
   function preview(){
     const box=$('correction-impact');box.replaceChildren();
@@ -44,7 +44,7 @@
     if(kind==='loan'){loan=data.loans.find(l=>l.id===id);record=loan;bills=data.bills.filter(b=>b.loan_id===id).sort((a,b)=>a.id-b.id);}
     else if(kind==='bill'){bill=data.bills.find(b=>b.id===id);record=bill;}
     else{bill=data.bills.find(b=>b.payments.some(p=>p.id===id));record=bill?.payments.find(p=>p.id===id);}
-    if(!record?.version)return;
+    const permitted=kind==='loan'?record:bill;if(!record?.version||!permitted?.can_manage)return;
     loan=loan||data.loans.find(l=>l.id===bill?.loan_id);selected={kind,action,record,bill,bills,loan};retry=null;
     form.reset();$('correction-error').hidden=true;$('correction-title').textContent=`${action==='delete'?'Delete':'Edit'} ${kind}`;
     $('correction-record').textContent=kind==='payment'?`${bill.title} · ${money(record.amount)} · ${record.paid_date}`:record.title;

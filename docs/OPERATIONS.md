@@ -12,7 +12,7 @@ The app does not install Docker, inspect arbitrary NAS addresses, modify DNS, or
 
 Configure a trusted Synology reverse proxy from the app's HTTPS hostname to HTTP `127.0.0.1:8787`. Configure the proxy to overwrite `X-Forwarded-Proto` with `https`. Keep `FBT_TRUST_PROXY=1` only with that trusted proxy and loopback-only port binding. Otherwise a client could claim a connection is secure.
 
-Use the same hostname in `FBT_ALLOWED_HOSTS` and the complete HTTPS origin in `FBT_TRUSTED_ORIGINS`. Do not use wildcards. All family accounts share a single household's records; this is not a multi-tenant service.
+Use the same hostname in `FBT_ALLOWED_HOSTS` and the complete HTTPS origin in `FBT_TRUSTED_ORIGINS`. Do not use wildcards. All accounts belong to one household, with shared Family records and owner-only Private records. See [private bills, PINs, and migration notes](PRIVACY-PIN-AND-BILL-TYPES.md) before deploying this release.
 
 ## Optional command-line configuration
 

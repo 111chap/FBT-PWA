@@ -3,6 +3,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
+  FBTSecurity.configure({request:api,refresh:loadSnapshot,notify:toast,emergency:loadEmergency});
   FBTCorrections.configure({request:api,refresh:loadSnapshot,notify:toast});
   let data = null, connected = false, pendingRefresh = false, checking = false, signingOut = false;
   let auditEvents = [], auditPageNumber = 1, auditTransaction = '', selectedAudit = null, auditRequest = 0;
@@ -41,6 +42,7 @@
     location.replace('/login/');
   }
   async function api(url, options = {}) {
+    if(data?.emergency && options.method && options.method!=='GET' && url!=='/api/privacy/emergency/') throw new Error('Exit emergency visibility before making changes.');
     if (options.method && options.method !== 'GET' && (!connected || pendingRefresh)) throw new Error('Reconnect and update your bills before making changes.');
     let response;
     try { response = await fetchTimed(url, {...options, headers:{'Content-Type':'application/json', 'X-CSRFToken':csrf(), ...options.headers}}); }
@@ -51,10 +53,11 @@
     return result;
   }
   async function saveCurrent() {
-    if (!offlineEnabled || !data) return;
+    if (!offlineEnabled || !data || data.emergency) return;
     try { await FBTOffline.write(data); }
     catch (exception) { error(exception.message + ' Your online records are safe, but this device may have an older offline copy.'); }
   }
+  async function loadEmergency(){const value=await api('/api/privacy/emergency/records/');data=value;pendingRefresh=false;setConnection(true);render();}
   async function loadSnapshot(initial = false) {
     if(signingOut) return;
     try {
@@ -69,7 +72,7 @@
       await saveCurrent(); render();
     } catch (exception) {
       if (initial && offlineEnabled && !localStorage.getItem('fbt-logout-pending')) {
-        try { data = await FBTOffline.read(); } catch (storageError) { error(storageError.message); }
+        try { const scope=Number(document.cookie.split('; ').find(v=>v.startsWith('fbt_account_scope='))?.split('=')[1]);data=Number.isInteger(scope)&&scope>0?await FBTOffline.read(scope):null; } catch (storageError) { error(storageError.message); }
       }
       pendingRefresh = false; setConnection(false);
       if (data) render();
@@ -78,11 +81,13 @@
   }
   function setConnection(value) {
     connected = value;
+    if(data?.emergency&&!value){location.reload();return;}
+    if(data)FBTSecurity.update(data,value);
     if(data){FBTProfile.update(data,connected);FBTCorrections.update(data,connected,pendingRefresh);}
     $('connection-badge').className = 'badge ' + (value ? 'healthy' : 'warning');
     $('connection-badge').textContent = value ? '● Home server connected' : '○ Offline · read-only';
     $('home-copy').textContent = value ? 'Your home server is reachable. Your family is connected.' : 'You are viewing a saved copy. Updates need a connection to your home server.';
-    document.querySelectorAll('[data-online]').forEach(button => button.disabled = !value || pendingRefresh);
+    document.querySelectorAll('[data-online]').forEach(button => button.disabled = !value || pendingRefresh || !!data?.emergency);
     $('server-form').querySelectorAll('input,button').forEach(input => input.disabled = !value || pendingRefresh || !data?.user.admin);
     $('export-link').hidden = !value;
     const showNotice = !value || pendingRefresh;
@@ -102,14 +107,14 @@
     }
   }
   function row(bill) {
-    return `<tr><td><button class="bill-detail" data-id="${bill.id}">${esc(bill.title)}</button><span class="small muted">${esc(bill.category)} · Primary payer: ${esc(bill.responsible)}${bill.recurring ? ' · Monthly' : ''}</span></td><td data-label="Due date">${dateLabel(bill.due_date)}</td><td data-label="Original amount">${currency(bill.amount)}</td><td data-label="Amount unpaid">${currency(bill.balance)}</td><td data-label="Payment status">${badge(bill.status)}</td><td>${Number(bill.balance) > 0 ? `<button class="button secondary pay-bill" data-id="${bill.id}" data-online ${!connected || pendingRefresh ? 'disabled' : ''}>Record payment</button>` : '✓ Complete'}</td></tr>`;
+    return `<tr><td><button class="bill-detail" data-id="${bill.id}">${esc(bill.title)}</button><span class="small muted">${esc(bill.bill_type==='one-time'?'One-time bill':bill.loan_id?'Loan':'Utilities')} · ${esc(bill.visibility||'family')} · ${esc(bill.category)} · Primary payer: ${esc(bill.responsible)}${bill.recurring ? ' · Monthly' : ''}</span></td><td data-label="Due date">${dateLabel(bill.due_date)}</td><td data-label="Original amount">${currency(bill.amount)}</td><td data-label="Amount unpaid">${currency(bill.balance)}</td><td data-label="Payment status">${badge(bill.status)}</td><td>${Number(bill.balance) > 0 ? `<button class="button secondary pay-bill" data-id="${bill.id}" data-online ${!connected || pendingRefresh || data.emergency ? 'disabled' : ''}>Record payment</button>` : '✓ Complete'}</td></tr>`;
   }
   function renderBills(keepPage=false) {
     if(keepPage!==true)billPage=1;
     if (!data) return;
     const search = $('search').value.toLowerCase();
     const filter = $('status-filter').value;
-    const bills = FBTFilters.filterRecords(data.bills.filter(b=>Number(b.balance)>0), {...viewFilters('bill'), search, status:filter, sort:billSort});
+    const bills = FBTFilters.filterRecords(data.bills.filter(b=>Number(b.balance)>0&&($('type-filter').value==='all'||(b.loan_id?'loan':b.bill_type||'utilities')===$('type-filter').value)), {...viewFilters('bill'), search, status:filter, sort:billSort});
     billPage=pageControls('bill',billPage,bills.length);
     $('bill-rows').innerHTML=bills.slice((billPage-1)*listPageSize,billPage*listPageSize).map(row).join('');
     $('bills-empty').hidden = bills.length > 0;
@@ -176,7 +181,7 @@
     const pages=Math.max(1,Math.ceil(records.length/historyPageSize)); historyPage=Math.min(historyPage,pages);
     $('history-rows').innerHTML=records.slice((historyPage-1)*historyPageSize,historyPage*historyPageSize).map(bill=> {
       const loan=data.loans.find(loan=>loan.id===bill.loan_id);
-      return `<tr><td><button class="bill-detail" data-id="${bill.id}">${esc(bill.title)}</button><span class="small muted">${esc(bill.category)} · Primary payer: ${esc(bill.responsible)}${loan?` · Loan: ${esc(loan.title)}`:''}</span></td><td data-label="Due date">${dateLabel(bill.due_date)}</td><td data-label="Original amount">${currency(bill.amount)}</td><td data-label="Total paid">${currency(bill.total_paid)}</td><td data-label="Date fully paid">${dateLabel(bill.completed_date)}</td><td><button class="button secondary bill-detail" data-id="${bill.id}">Review payments</button></td></tr>`;
+      return `<tr><td><button class="bill-detail" data-id="${bill.id}">${esc(bill.title)}</button><span class="small muted">${esc(bill.bill_type==='one-time'?'One-time bill':bill.loan_id?'Loan':'Utilities')} · ${esc(bill.visibility||'family')} · ${esc(bill.category)} · Primary payer: ${esc(bill.responsible)}${loan?` · Loan: ${esc(loan.title)}`:''}</span></td><td data-label="Due date">${dateLabel(bill.due_date)}</td><td data-label="Original amount">${currency(bill.amount)}</td><td data-label="Total paid">${currency(bill.total_paid)}</td><td data-label="Date fully paid">${dateLabel(bill.completed_date)}</td><td><button class="button secondary bill-detail" data-id="${bill.id}">Review payments</button></td></tr>`;
     }).join('');
     $('history-empty').hidden=records.length>0;
     $('history-summary').textContent=invalid?'Check the date and amount ranges: minimum must not exceed maximum.':`${records.length} fully paid bill${records.length===1?'':'s'} · Shared family history · Saved ${stamp(data.synced_at)}`;
@@ -204,16 +209,18 @@
     form.addEventListener('submit',event=>event.preventDefault()); form.addEventListener('input',update);
     // Text-field blur must not rebuild rows between pointer-down and click.
     form.addEventListener('change',event=> {if(event.target.tagName==='SELECT') update();});
-    form.addEventListener('reset',()=> { if(prefix==='bill') { $('search').value=''; $('status-filter').value='all'; billSort='date-asc'; } else { $('loan-search').value=''; $('loan-status-filter').value='all'; loanSort='date-asc'; } setTimeout(update,0); });
+    form.addEventListener('reset',()=> { if(prefix==='bill') { $('search').value=''; $('status-filter').value='all'; $('type-filter').value='all'; billSort='date-asc'; } else { $('loan-search').value=''; $('loan-status-filter').value='all'; loanSort='date-asc'; } setTimeout(update,0); });
   }
   function renderRecurrences() {
-    $('recurrence-list').innerHTML = (data.recurrences || []).filter(r=>!r.removed).map(r=>`<div class="recurrence-item"><strong>${esc(r.title)}</strong><p class="hint">Day ${r.anchor_day} each month · ${r.active ? 'Active' : 'Cancelled'} · Primary payer: ${esc(data.members.find(m=>m.id===r.responsible_id)?.username || 'Inactive member')}</p>${data.user.admin && r.active ? `<button class="button secondary recurrence-action" data-id="${r.id}" data-action="cancel" data-online>Cancel schedule</button>` : ''}${data.user.admin && !data.bills.some(b=>b.recurrence_id===r.id && b.payments.length) ? `<button class="button secondary recurrence-action" data-id="${r.id}" data-action="remove" data-online>Remove schedule</button>` : ''}</div>`).join('') || '<p class="hint">No monthly schedules.</p>';
+    $('recurrence-list').innerHTML = (data.recurrences || []).filter(r=>!r.removed).map(r=>`<div class="recurrence-item"><strong>${esc(r.title)}</strong><p class="hint">Day ${r.anchor_day} each month · ${r.active ? 'Active' : 'Cancelled'} · Primary payer: ${esc(data.members.find(m=>m.id===r.responsible_id)?.username || 'Inactive member')}</p>${r.can_manage && !data.emergency && r.active ? `<button class="button secondary recurrence-action" data-id="${r.id}" data-action="cancel" data-online>Cancel schedule</button>` : ''}${r.can_manage && !data.emergency && !data.bills.some(b=>b.recurrence_id===r.id && b.payments.length) ? `<button class="button secondary recurrence-action" data-id="${r.id}" data-action="remove" data-online>Remove schedule</button>` : ''}</div>`).join('') || '<p class="hint">No monthly schedules.</p>';
     setConnection(connected);
   }
   function showDetailActions(bill) {
     const recurrence = (data.recurrences || []).find(r=>r.id===bill.recurrence_id);
     $('detail-recurrence').textContent = recurrence ? `Monthly: day ${recurrence.anchor_day} (last valid day in shorter months). Schedule ${recurrence.active ? 'active' : 'cancelled'}.` : '';
-    $('detail-actions').innerHTML = data.user.admin ? `<button class="button secondary reassign-payer" data-id="${bill.id}" data-online aria-label="Change primary payer">Change payer</button>${FBTCorrections.controls('bill',bill.id)}` : '';
+    $('detail-actions').innerHTML = (data.user.admin && bill.can_manage && !data.emergency) ? `<button class="button secondary reassign-payer" data-id="${bill.id}" data-online aria-label="Change primary payer">Change payer</button>${FBTCorrections.controls('bill',bill.id)}` : FBTCorrections.controls('bill',bill.id);
+    const sharedRecord=bill.loan_id?data.loans.find(r=>r.id===bill.loan_id):recurrence||bill;
+    $('detail-actions').innerHTML+=FBTSecurity.sharingControl(bill.loan_id?'loan':recurrence?'recurrence':'bill',sharedRecord);
     setConnection(connected);
   }
   document.addEventListener('click',async event=> {
@@ -263,7 +270,7 @@
     $('detail-title').textContent=loan.title;
     $('detail-summary').textContent=`${currency(loan.total)} agreed total · ${currency(bills.reduce((sum,b)=>sum+Math.round(Number(b.balance)*100),0)/100)} unpaid · ${loan.installments} installments`;
     $('detail-recurrence').textContent='Monthly repayment schedule';
-    $('detail-actions').innerHTML=FBTCorrections.controls('loan',loan.id);
+    $('detail-actions').innerHTML=FBTCorrections.controls('loan',loan.id)+FBTSecurity.sharingControl('loan',loan);
     $('detail-notes').textContent='Select an installment to review its bill and recorded payments.';
     $('detail-payments').innerHTML=bills.map(b=>`<div class="activity"><div><button class="bill-detail" data-id="${b.id}">${esc(b.title)}</button><p>${dateLabel(b.due_date)} · Primary payer: ${esc(b.responsible)}</p><p>${currency(b.amount)} original · ${currency(b.balance)} unpaid</p></div>${badge(b.status)}</div>`).join('');
     $('detail-dialog').showModal();
@@ -293,7 +300,7 @@
     $('activity-list').innerHTML = activity.map(p => `<div class="activity"><div><strong>${esc(p.title)}</strong><p>Recorded by ${esc(p.recorded_by)} · ${dateLabel(p.paid_date)}</p></div><strong>${currency(p.amount)}</strong></div>`).join('') || '<p class="small muted">Payments recorded by your family will appear here.</p>';
     document.querySelectorAll('select.members').forEach(select => { const previous = select.value; select.innerHTML = data.members.map(member => `<option value="${member.id}">${esc(member.username)}</option>`).join(''); select.value = previous || data.user.id; });
     for (const name of ['family_name','nas_name','server_url']) $('server-form').elements[name].value = data[name] || '';
-    $('server-form').querySelectorAll('input,button').forEach(input => input.disabled = !data.user.admin || !connected || pendingRefresh);
+    $('server-form').querySelectorAll('input,button').forEach(input => input.disabled = !data.user.admin || !connected || pendingRefresh || !!data.emergency);
     $('server-form').hidden = !data.user.admin;
     $('shared-server').hidden = data.user.admin;
     $('server-heading').textContent = data.user.admin ? 'Name your home server' : 'Your family’s home server';
@@ -305,6 +312,7 @@
     $('audit-nav').hidden = !data.user.admin;
     $('offline-setting').textContent = offlineEnabled ? `Enabled on this device. Saved copies expire after seven days. Last fetched ${stamp(data.synced_at)}.` : 'Offline viewing is off. Enable it on a trusted device while connected.';
     renderHistoryMembers(); route();
+    document.querySelectorAll('[data-online]').forEach(button=>button.disabled=!connected||pendingRefresh||!!data.emergency);
   }
   function route() {
     const name = ['overview','bills','loans','history','system','setup','audit'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'overview';
@@ -393,7 +401,7 @@
     finally { checking = false; }
   }
   function openDialog(id) {
-    if (!connected || pendingRefresh) { toast('Connect to home and update your bills first.'); return; }
+    if (!connected || pendingRefresh || data?.emergency) { toast('Connect to home and update your bills first.'); return; }
     const dialog = $(id); dialog.querySelector('.dialog-error').hidden = true; dialog.showModal();
   }
   function formReview(form, value) {
@@ -404,6 +412,7 @@
       const display = field.type === 'checkbox' ? (field.checked ? 'Yes' : 'No') : field.tagName === 'SELECT' ? field.selectedOptions[0]?.textContent : field.value || '—';
       rows.push([name, display]);
     }
+    if(['bill-form','loan-form'].includes(form.id))rows.unshift(['Bill type',form.id==='loan-form'?'Loan':value.bill_type==='one-time'?'One-time bill':'Utilities']);
     if(form.id === 'payment-form') {
       const bill = data.bills.find(b=>b.id===Number(value.bill_id));
       rows.unshift(['Bill',bill.title],['Current unpaid balance',currency(bill.balance)]);
@@ -433,15 +442,16 @@
         if(['bill-form','loan-form'].includes(formId)) value.request_key = form.dataset.requestKey ||= crypto.randomUUID();
         const draft = JSON.stringify(Object.fromEntries(new FormData(form)));
         if(!await FBTReview(formReview(form,value))) return;
+        if(['bill-form','loan-form'].includes(formId)&&value.visibility==='family')value.sharing_confirmed=true;
         if(draft !== JSON.stringify(Object.fromEntries(new FormData(form)))) throw new Error('The draft changed. Review again.');
         await api(typeof endpoint === 'function' ? endpoint(value) : endpoint, {method:'POST', body:JSON.stringify(value)});
-        form.closest('dialog')?.close(); form.reset(); await loadSnapshot(); toast('Saved for your family.');
+        form.closest('dialog')?.close(); form.reset(); await loadSnapshot(); toast(['bill-form','loan-form'].includes(formId)&&value.visibility==='private'?'Saved privately for your account.':'Saved for your family.');
       } catch (exception) { if(message) { message.textContent = exception.message; message.hidden = false; } else error(exception.message); }
       finally { delete form.dataset.busy; button.disabled = !connected || pendingRefresh; }
     });
   }
   function startBillEntry(type=null) {
-    if(!connected || pendingRefresh) { toast('Connect to home and update your bills first.'); return; }
+    if(!connected || pendingRefresh || data?.emergency) { toast('Connect to home and update your bills first.'); return; }
     for(const id of ['bill-form','loan-form']) {
       const form=$(id); form.reset(); form.elements.responsible.value=data.user.id;
       form.elements[id==='bill-form'?'due_date':'first_due'].value=today();
@@ -452,7 +462,9 @@
   document.querySelectorAll('.add-bill').forEach(button=>button.addEventListener('click',()=>startBillEntry()));
   $('add-loan').addEventListener('click',()=>startBillEntry('loan'));
   document.querySelectorAll('[data-bill-type]').forEach(button=>button.addEventListener('click',()=> {
-    $('bill-type-dialog').close(); openDialog(button.dataset.billType==='loan'?'loan-dialog':'bill-dialog');
+    $('bill-type-dialog').close();
+    if(button.dataset.billType!=='loan'){const single=button.dataset.billType==='one-time';$('bill-form').elements.bill_type.value=single?'one-time':'utilities';$('bill-entry-heading').textContent=single?'Add a one-time bill':'Add a utilities bill';$('repeat-option').hidden=$('repeat-hint').hidden=single;$('bill-form').elements.repeat_monthly.checked=false;$('bill-form').elements.repeat_monthly.disabled=single;$('bill-form').querySelector('button.primary').textContent=single?'Review one-time bill →':'Review utilities bill →';const category=$('bill-form').elements.category;category.replaceChildren(...(single?['Household','Education','Repairs','Purchase','Other']:['Electricity','Water','Internet','Gas','Other utilities']).map(value=>new Option(value,value)));}
+    openDialog(button.dataset.billType==='loan'?'loan-dialog':'bill-dialog');
   }));
   document.querySelectorAll('.back-to-bill-type').forEach(button=>button.addEventListener('click',()=> {
     button.closest('dialog').close(); openDialog('bill-type-dialog');
@@ -483,7 +495,7 @@
       $('detail-title').textContent = bill.title;
       const parentLoan=data.loans.find(loan=>loan.id===bill.loan_id);
       $('detail-notes').textContent = (parentLoan ? `Loan: ${parentLoan.title}. ` : '') + (bill.notes || 'No notes added.');
-      $('detail-summary').textContent = `${currency(bill.amount)} original · ${currency(bill.balance)} unpaid · Due ${dateLabel(bill.due_date)} · Primary payer: ${bill.responsible}`;
+      $('detail-summary').textContent = `${bill.bill_type==='one-time'?'One-time bill':bill.loan_id?'Loan':'Utilities'} · ${bill.visibility||'family'} · ${currency(bill.amount)} original · ${currency(bill.balance)} unpaid · Due ${dateLabel(bill.due_date)} · Primary payer: ${bill.responsible}`;
       $('detail-payments').innerHTML = bill.payments.map(p => `<div class="activity"><div><strong>${currency(p.amount)}</strong><p>${dateLabel(p.paid_date)} · Recorded by ${esc(p.recorded_by)}</p>${FBTCorrections.controls('payment',p.id)}</div></div>`).join('') || '<p class="small muted">No payments recorded yet.</p>';
       showDetailActions(bill);
       $('detail-dialog').showModal();
@@ -500,7 +512,7 @@
   submitForm('payment-form', value => `/api/bills/${value.bill_id}/payments/`);
   submitForm('server-form', '/api/settings/');
   submitForm('payer-form', value => `/api/bills/${value.bill_id}/payer/`);
-  $('search').addEventListener('input',renderBills); $('status-filter').addEventListener('change',renderBills);
+  $('search').addEventListener('input',renderBills); $('status-filter').addEventListener('change',renderBills); $('type-filter').addEventListener('change',renderBills);
   $('loan-search').addEventListener('input',renderLoans);
   $('loan-status-filter').addEventListener('change',renderLoans);
   $('refresh-loans').addEventListener('click',()=>loadSnapshot());
@@ -526,7 +538,7 @@
   $('refresh-online').addEventListener('click',() => loadSnapshot());
   $('refresh-snapshot').addEventListener('click',async () => { $('refresh-snapshot').disabled = true; await loadSnapshot(); $('refresh-snapshot').disabled = false; });
   $('enable-offline').addEventListener('click',async () => {
-    if (!connected || pendingRefresh || !data) { toast('Connect and update your bills before saving an offline copy.'); return; }
+    if (!connected || pendingRefresh || !data || data.emergency) { toast('Exit emergency visibility, then connect and update your bills before saving an offline copy.'); return; }
     if (!isSecureContext || !('serviceWorker' in navigator)) { error('Offline installation needs a trusted HTTPS address, or localhost for development.'); return; }
     try { await navigator.serviceWorker.ready; await FBTOffline.write(data); localStorage.setItem('fbt-offline-enabled','yes'); localStorage.setItem('fbt-offline-owner',String(data.user.id)); offlineEnabled = true; render(); toast('A read-only copy is saved on this device.'); }
     catch(exception) { error(exception.message); }

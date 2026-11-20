@@ -10,7 +10,7 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, PermissionDenied
 from django.core.validators import validate_email
 from django.db import connection, transaction, IntegrityError
 from django.db.models import ProtectedError
@@ -27,6 +27,7 @@ from .services import money, next_month, validate_server_url, validate_push_endp
 from .audit import trigger_status
 from .versions import loan_version, payment_version, bill_version, settings_version, recurrence_version
 from .idempotency import idempotent
+from .privacy import visible, creation_privacy, require_manage, may_manage, audit_visible
 
 User = get_user_model()
 
@@ -37,7 +38,13 @@ def api(view):
         if not request.user.is_authenticated:
             return JsonResponse({'error': 'Sign in again to connect to your family server.'}, status=401)
         try:
+            if request.session.get('emergency_grant') and request.method not in ('GET','HEAD','OPTIONS') and request.path != '/api/privacy/emergency/':
+                from .privacy import current_grant
+                if current_grant(request):
+                    return JsonResponse({'error': 'Exit emergency visibility before making changes.'}, status=403)
             return view(request, *args, **kwargs)
+        except PermissionDenied:
+            return JsonResponse({'error': 'This action is not available for this record.'}, status=403)
         except ValidationError as error:
             return JsonResponse({'error': ' '.join(error.messages)}, status=400)
         except (ValueError, TypeError, KeyError, json.JSONDecodeError):
@@ -123,6 +130,9 @@ def login_view(request):
 
 @require_POST
 def logout_view(request):
+    from .privacy import current_grant, end_grant
+    if request.user.is_authenticated:
+        end_grant(current_grant(request))
     logout(request)
     return JsonResponse({'ok': True})
 
@@ -195,16 +205,16 @@ def reachable(request):
 
 @require_GET
 @api
-def snapshot(request):
+def snapshot(request, emergency=False):
     site = SiteSettings.objects.filter(pk=1).first() or SiteSettings()
     bills = []
     loan_bills = {}
-    for bill in Bill.objects.filter(removed=False).select_related('responsible', 'created_by').prefetch_related('payments__recorded_by'):
+    for bill in (Bill.objects.all() if emergency else visible(Bill, request.user)).filter(removed=False).select_related('responsible', 'created_by', 'loan', 'recurrence').prefetch_related('payments__recorded_by'):
         if bill.loan_id:loan_bills.setdefault(bill.loan_id,[]).append(bill)
         balance = bill.balance
         state = 'paid' if balance <= 0 else 'overdue' if bill.due_date < timezone.localdate() else 'partial' if bill.paid else 'upcoming'
-        bills.append({'version': bill_version(bill), 'responsible_id': bill.responsible_id, 'recurrence_id': bill.recurrence_id, 'id': bill.pk, 'title': bill.title, 'amount': str(bill.amount), 'balance': str(balance), 'due_date': bill.due_date.isoformat(), 'category': bill.category, 'notes': bill.notes, 'responsible': bill.responsible.username, 'status': state, 'loan_id': bill.loan_id, 'recurring': bool(bill.recurrence_id), 'payments': [{'id':p.pk,'version':payment_version(p),'amount': str(p.amount), 'paid_date': p.paid_date.isoformat(), 'recorded_by': p.recorded_by.username, 'recorded_by_id': p.recorded_by_id} for p in bill.payments.all() if not p.removed]})
-    return JsonResponse({'version': 1, 'synced_at': timezone.now().isoformat(), 'today': timezone.localdate().isoformat(), 'currency': 'PHP', 'settings_version': settings_version(site), 'recurrences': [{'id': r.pk, 'title': r.title, 'anchor_day': r.anchor_day, 'active': r.active, 'removed': r.removed, 'next_due': r.next_due.isoformat(), 'responsible_id': r.responsible_id, 'version': recurrence_version(r)} for r in Recurrence.objects.all()], 'family_name': site.family_name, 'nas_name': site.nas_name, 'server_url': site.server_url, 'user': {'id': request.user.pk, 'name': request.user.username, 'admin': request.user.is_superuser}, 'members': list(User.objects.filter(is_active=True).values('id', 'username')), 'bills': bills, 'loans': [{'id': loan.pk, 'title': loan.title, 'total': str(loan.total), 'installments': loan.installments,'version':loan_version(loan,loan_bills.get(loan.pk,[]))} for loan in Loan.objects.filter(removed=False)], 'vapid_public_key': settings.VAPID_PUBLIC_KEY if push_ready() else ''})
+        bills.append({'bill_type': 'loan' if bill.loan_id else bill.bill_type, 'owner_id': bill.owner_id, 'visibility': bill.visibility, 'can_manage': not emergency and may_manage(request.user, bill), 'version': bill_version(bill), 'responsible_id': bill.responsible_id, 'recurrence_id': bill.recurrence_id, 'id': bill.pk, 'title': bill.title, 'amount': str(bill.amount), 'balance': str(balance), 'due_date': bill.due_date.isoformat(), 'category': bill.category, 'notes': bill.notes, 'responsible': bill.responsible.username, 'status': state, 'loan_id': bill.loan_id, 'recurring': bool(bill.recurrence_id), 'payments': [{'id':p.pk,'version':payment_version(p),'amount': str(p.amount), 'paid_date': p.paid_date.isoformat(), 'recorded_by': p.recorded_by.username, 'recorded_by_id': p.recorded_by_id} for p in bill.payments.all() if not p.removed]})
+    return JsonResponse({'version': 1, 'offline_safe': not emergency, 'emergency': emergency, 'synced_at': timezone.now().isoformat(), 'today': timezone.localdate().isoformat(), 'currency': 'PHP', 'settings_version': settings_version(site), 'recurrences': [{'id': r.pk, 'owner_id': r.owner_id, 'visibility': r.visibility, 'can_manage': not emergency and may_manage(request.user,r), 'title': r.title, 'anchor_day': r.anchor_day, 'active': r.active, 'removed': r.removed, 'next_due': r.next_due.isoformat(), 'responsible_id': r.responsible_id, 'version': recurrence_version(r)} for r in (Recurrence.objects.all() if emergency else visible(Recurrence, request.user))], 'family_name': site.family_name, 'nas_name': site.nas_name, 'server_url': site.server_url, 'user': {'id': request.user.pk, 'name': request.user.username, 'admin': request.user.is_superuser}, 'members': list(User.objects.filter(is_active=True).values('id', 'username')), 'bills': bills, 'loans': [{'id': loan.pk, 'title': loan.title, 'total': str(loan.total), 'installments': loan.installments, 'owner_id': loan.owner_id, 'visibility': loan.visibility, 'can_manage': not emergency and may_manage(request.user, loan), 'version':loan_version(loan,loan_bills.get(loan.pk,[]))} for loan in (Loan.objects.all() if emergency else visible(Loan, request.user)).filter(removed=False)], 'vapid_public_key': settings.VAPID_PUBLIC_KEY if push_ready() else ''})
 
 
 @require_POST
@@ -216,12 +226,18 @@ def create_bill(request):
     due = parsed_date(data['due_date'])
     title = label(data, 'title', 100)
     category = label(data, 'category', 40, 'Household')
+    privacy = creation_privacy(data, request.user)
+    bill_type = data.get('bill_type', 'utilities')
+    if bill_type not in ('utilities', 'one-time') or (bill_type == 'one-time' and data.get('repeat_monthly')):
+        raise ValidationError('One-time bills cannot repeat; use Utilities for monthly schedules.')
     responsible = User.objects.get(pk=int(data.get('responsible', request.user.pk)), is_active=True)
+    if data.get('visibility', 'private') == 'private' and responsible.pk != request.user.pk:
+        raise ValidationError('Choose yourself as primary payer for a private record, or choose Family to assign another member.')
     with transaction.atomic():
         recurrence = None
         if data.get('repeat_monthly') is True:
-            recurrence = Recurrence.objects.create(title=title, amount=amount, category=category, next_due=next_month(due, due.day), anchor_day=due.day, responsible=responsible, created_by=request.user)
-        bill = Bill.objects.create(title=title, amount=amount, due_date=due, category=category, notes=text(data, 'notes', 500), responsible=responsible, created_by=request.user, recurrence=recurrence)
+            recurrence = Recurrence.objects.create(**privacy, title=title, amount=amount, category=category, next_due=next_month(due, due.day), anchor_day=due.day, responsible=responsible, created_by=request.user)
+        bill = Bill.objects.create(**privacy, bill_type=bill_type, title=title, amount=amount, due_date=due, category=category, notes=text(data, 'notes', 500), responsible=responsible, created_by=request.user, recurrence=recurrence)
     return JsonResponse({'id': bill.pk}, status=201)
 
 
@@ -235,7 +251,7 @@ def record_payment(request, bill_id):
         raise ValidationError('A recorded payment cannot be dated in the future.')
     request_key = uuid.UUID(str(data['request_key']))
     with transaction.atomic():
-        bill = Bill.objects.select_for_update().get(pk=bill_id)
+        bill = visible(Bill, request.user).select_for_update().get(pk=bill_id)
         previous = Payment.objects.filter(request_key=request_key).first()
         if previous:
             if previous.bill_id == bill.pk and previous.recorded_by_id == request.user.pk and previous.amount == amount and previous.paid_date == paid_date:
@@ -264,14 +280,17 @@ def create_loan(request):
     due = parsed_date(data['first_due'])
     anchor = due.day
     responsible = User.objects.get(pk=int(data.get('responsible', request.user.pk)), is_active=True)
+    if data.get('visibility', 'private') == 'private' and responsible.pk != request.user.pk:
+        raise ValidationError('Choose yourself as primary payer for a private record, or choose Family to assign another member.')
+    privacy = creation_privacy(data, request.user)
     installment = (total / count).quantize(Decimal('.01'))
     # Round down so the final installment remains positive for very small loans.
     installment = (total // Decimal('.01') // count) * Decimal('.01')
     with transaction.atomic():
-        loan = Loan.objects.create(title=title, total=total, installments=count, created_by=request.user)
+        loan = Loan.objects.create(**privacy, title=title, total=total, installments=count, created_by=request.user)
         for index in range(count):
             amount = total - installment * (count - 1) if index == count - 1 else installment
-            Bill.objects.create(title=f'{title[:85]} · {index + 1}/{count}', amount=amount, due_date=due, category='Loan', responsible=responsible, created_by=request.user, loan=loan)
+            Bill.objects.create(**privacy, bill_type='loan', title=f'{title[:85]} · {index + 1}/{count}', amount=amount, due_date=due, category='Loan', responsible=responsible, created_by=request.user, loan=loan)
             due = next_month(due, anchor)
     return JsonResponse({'id': loan.pk}, status=201)
 
@@ -297,11 +316,10 @@ def update_settings(request):
 @require_POST
 @api
 def recurrence_action(request, recurrence_id):
-    if not request.user.is_superuser:
-        return JsonResponse({'error': 'Only the administrator can cancel or remove repeating bills.'}, status=403)
     data = body(request)
     with transaction.atomic():
-        recurrence = Recurrence.objects.select_for_update().get(pk=recurrence_id)
+        recurrence = visible(Recurrence, request.user).select_for_update().get(pk=recurrence_id)
+        require_manage(request.user, recurrence)
         current = recurrence_version(recurrence)
         if data.get('expected_version') != current:
             return JsonResponse({'error': 'This schedule changed. Refresh and review again.'}, status=409)
@@ -327,7 +345,8 @@ def remove_bill(request, bill_id):
         return JsonResponse({'error': 'Only the administrator can remove a bill.'}, status=403)
     data = body(request)
     with transaction.atomic():
-        bill = Bill.objects.select_for_update().get(pk=bill_id)
+        bill = visible(Bill, request.user).select_for_update().get(pk=bill_id)
+        require_manage(request.user, bill)
         if data.get('expected_version') != bill_version(bill):
             return JsonResponse({'error': 'This bill changed. Refresh and review again.'}, status=409)
         if bill.payments.exists() or bill.loan_id:
@@ -345,12 +364,15 @@ def reassign_payer(request, bill_id):
     data = body(request)
     with transaction.atomic():
         # Same lock order as the recurrence worker / lifecycle operation.
-        target = Bill.objects.get(pk=bill_id)
+        target = visible(Bill, request.user).get(pk=bill_id)
         recurrence = Recurrence.objects.select_for_update().get(pk=target.recurrence_id) if target.recurrence_id else None
-        bill = Bill.objects.select_for_update().get(pk=bill_id, removed=False)
+        bill = visible(Bill, request.user).select_for_update().get(pk=bill_id, removed=False)
+        require_manage(request.user, bill)
         if data.get('expected_version') != bill_version(bill):
             return JsonResponse({'error': 'This bill changed. Refresh and review again.'}, status=409)
         payer = User.objects.select_for_update().get(pk=int(data['responsible']), is_active=True)
+        if bill.visibility == 'private' and payer.pk != bill.owner_id:
+            raise ValidationError('A private bill must keep its owner as primary payer.')
         scope = data.get('scope', 'current')
         if scope not in ('current', 'future') or (scope == 'future' and not recurrence):
             raise ValidationError('Choose a valid assignment scope.')
@@ -395,12 +417,12 @@ def export_bills(request):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="family-bills.csv"'
     writer = csv.writer(response)
-    writer.writerow(['Bill', 'Due date', 'Amount PHP', 'Unpaid PHP', 'Primary payer'])
-    for bill in Bill.objects.filter(removed=False).select_related('responsible').prefetch_related('payments'):
+    writer.writerow(['Bill', 'Due date', 'Amount PHP', 'Unpaid PHP', 'Primary payer', 'Type', 'Visibility'])
+    for bill in visible(Bill, request.user).filter(removed=False).select_related('responsible').prefetch_related('payments'):
         safe_title = "'" + bill.title if bill.title.startswith(('=', '+', '-', '@', '\t', '\r', '\n')) else bill.title
         username = bill.responsible.username
         safe_user = "'" + username if username.startswith(('=', '+', '-', '@')) else username
-        writer.writerow([safe_title, bill.due_date, bill.amount, bill.balance, safe_user])
+        writer.writerow([safe_title, bill.due_date, bill.amount, bill.balance, safe_user, 'Loan' if bill.loan_id else bill.get_bill_type_display(), bill.get_visibility_display()])
     return response
 
 
@@ -462,7 +484,7 @@ def test_push(request):
 def audit_history(request):
     if not request.user.is_superuser:
         return JsonResponse({'error': 'Only the family administrator can review the full audit history.'}, status=403)
-    events = AuditEvent.objects.all()
+    events = audit_visible(request.user)
     search = request.GET.get('search', '').strip()
     if len(search) > 150:
         raise ValidationError('Use a shorter search term.')
