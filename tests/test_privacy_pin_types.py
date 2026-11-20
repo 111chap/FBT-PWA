@@ -225,3 +225,14 @@ class PrivacyPinTests(TestCase):
         self.private.loan=loan;self.private.save()
         self.client.force_login(self.admin)
         self.assertEqual(self.client.get('/api/snapshot/').json()['loans'],[])
+
+    def test_account_deleted_during_pin_request_is_rejected_gracefully(self):
+        from tracker.security import digest
+        user=get_user_model().objects.create_user('deleted-pin-fixture',password=PASSWORD)
+        device=PinDevice.objects.create(user=user,verifier=digest('fictional-device-token-with-enough-characters'),password_stamp=digest(user.password),expires_at=timezone.now()+timedelta(days=1))
+        get_user_model().objects.filter(pk=user.pk).delete()
+        self.client.logout()
+        with patch('tracker.security.trusted',return_value=device):
+            response=self.client.post('/login/pin/',{'pin':PIN},secure=True)
+        self.assertEqual(response.status_code,200)
+        self.assertNotIn('_auth_user_id',self.client.session)

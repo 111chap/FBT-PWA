@@ -88,10 +88,10 @@ def pin_login(request):
             if not device or network.attempts > 60:
                 event(None, 'PIN sign-in unavailable or network limited')
             else:
-                user = User.objects.select_for_update().get(pk=device.user_id)
+                user = User.objects.select_for_update().filter(pk=device.user_id).first()
                 # Re-check credentials after acquiring locks, including concurrent revocation.
-                device = trusted(request)
-                credential = PinCredential.objects.filter(user=user).first()
+                device = trusted(request) if user else None
+                credential = PinCredential.objects.filter(user=user).first() if user else None
                 if device and credential and credential.pin_hash and (not credential.blocked_until or credential.blocked_until <= now):
                     pin = request.POST.get('pin', '')
                     matched = bool(re.fullmatch(r'[0-9]{6,8}', pin)) and check_password(pin, credential.pin_hash)
