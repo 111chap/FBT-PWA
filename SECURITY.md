@@ -15,6 +15,8 @@ This application is an early development build for a single household, not a fin
 - No Docker socket, privileged app container, or published database port.
 - Database-triggered audit records commit or roll back with their business writes. Review is administrator-only, with no audit editing API. Passwords and subscription secrets are excluded. See [audit design](docs/AUDIT.md).
 
+- Receipt and QR uploads use decoded/re-encoded still images, size/pixel/upload-count/storage limits, EXIF removal, private authenticated responses, manifest checks, and a dedicated media volume. New application payments require evidence; legacy records remain explicitly identified. Refer to [storage, transaction boundaries and backups](docs/NOTES-RECEIPTS-QR-AND-REMINDERS.md).
+
 ## Limits
 
 - Offline snapshots are sensitive local data. They are not encrypted against a person controlling the same unlocked browser profile, and cannot be remotely erased while a device is disconnected.

@@ -16,7 +16,7 @@ class HistorySnapshotTests(TestCase):
         cls.loan=Loan.objects.create(title='Family car',total='100',installments=1,created_by=cls.admin)
         cls.bill=Bill.objects.create(title='Car installment',amount='100',due_date=date(2028,1,31),loan=cls.loan,responsible=cls.payer,created_by=cls.admin)
         for amount,day,recorder in [('40',20,cls.admin),('60',25,cls.member)]:
-            Payment.objects.create(bill=cls.bill,amount=amount,paid_date=date(2027,1,day),recorded_by=recorder,request_key=uuid.uuid4())
+            Payment.objects.create(receipt_required=False,bill=cls.bill,amount=amount,paid_date=date(2027,1,day),recorded_by=recorder,request_key=uuid.uuid4())
 
     def test_every_member_gets_shared_history_without_financial_or_audit_writes(self):
         for user in [self.admin,self.payer,self.member]:

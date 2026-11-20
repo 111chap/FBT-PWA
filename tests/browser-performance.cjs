@@ -26,7 +26,7 @@ const median=values=>values.sort((a,b)=>a-b)[Math.floor(values.length/2)];
     if(process.env.FBT_BENCHMARK_LABEL!=='baseline'){
       assert.ok(await page.locator('#bill-rows tr').count()<=25,'Bill DOM stays bounded for large households');
       await page.goto(base+'/app/#bills');const first=await page.locator('#bill-rows .bill-detail').first().getAttribute('data-id');
-      await page.locator('#bill-next').click();assert.match(await page.locator('#bill-page').innerText(),/Page 2 of 40/);assert.equal(await page.locator('#bill-rows tr').count(),25);
+      await page.locator('#bill-next').click();assert.match(await page.locator('#bill-page').innerText(),/Page 2 of 36/);assert.equal(await page.locator('#bill-rows tr').count(),25);
       assert.notEqual(await page.locator('#bill-rows .bill-detail').first().getAttribute('data-id'),first);
       await page.locator('#bill-previous').click();assert.equal(await page.locator('#bill-rows .bill-detail').first().getAttribute('data-id'),first);
       await page.locator('#bill-next').click();await page.locator('#search').fill('Power 0000');assert.equal(await page.locator('#bill-rows tr').count(),1);assert.match(await page.locator('#bill-page').innerText(),/Page 1 of 1/);

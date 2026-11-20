@@ -49,3 +49,16 @@ FBT_SETUP_TOKEN = os.getenv('FBT_SETUP_TOKEN', '')
 VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', '')
 VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', '')
 VAPID_SUBJECT = os.getenv('VAPID_SUBJECT', '')
+
+# Private files are served only by authenticated views, never Django MEDIA_URL.
+MEDIA_ROOT = Path(os.getenv('FBT_MEDIA_ROOT', str(BASE_DIR / 'media')))
+FBT_UPLOAD_MAX_BYTES = int(os.getenv('FBT_UPLOAD_MAX_BYTES', '8388608'))
+FBT_IMAGE_MAX_PIXELS = int(os.getenv('FBT_IMAGE_MAX_PIXELS', '20000000'))
+FBT_MEDIA_MAX_BYTES = int(os.getenv('FBT_MEDIA_MAX_BYTES', '2147483648'))
+DATA_UPLOAD_MAX_MEMORY_SIZE = 65536
+MIDDLEWARE.insert(MIDDLEWARE.index('django.middleware.csrf.CsrfViewMiddleware'), 'tracker.middleware.UploadLimits')
+
+TEST_RUNNER = 'tests.runner.PrivateMediaRunner'
+
+FBT_UPLOADS_PER_DAY = int(os.getenv('FBT_UPLOADS_PER_DAY','100'))
+FBT_PENDING_UPLOADS = int(os.getenv('FBT_PENDING_UPLOADS','20'))

@@ -26,7 +26,7 @@ class ReminderTests(TestCase):
 
     @patch('tracker.services.send_push')
     def test_paid_bill_suppresses_notification(self,send):
-        Payment.objects.create(bill=self.bill,amount='100',paid_date=self.now.date(),recorded_by=self.user,request_key=uuid.uuid4())
+        Payment.objects.create(receipt_required=False,bill=self.bill,amount='100',paid_date=self.now.date(),recorded_by=self.user,request_key=uuid.uuid4())
         deliver_reminders(self.now)
         send.assert_not_called()
 

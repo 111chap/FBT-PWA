@@ -9,6 +9,7 @@ from django.db import transaction
 from django.test import TestCase, Client, override_settings
 from django.utils import timezone
 from tracker.models import Bill, Loan, Recurrence, Payment, AuditEvent, PrivacyAccess, EmergencyGrant, PinCredential, PinDevice, PushSubscription
+from tests.media_helpers import receipt
 from tracker.services import deliver_reminders, materialize_recurring
 from tracker.versions import bill_version, loan_version
 from tracker.audit import audit_transaction, trigger_status
@@ -33,7 +34,9 @@ class PrivacyPinTests(TestCase):
         return self.client.post(path, json.dumps(data), content_type='application/json', **kwargs)
 
     def pay(self, bill):
-        return self.post(f'/api/bills/{bill.pk}/payments/', {'amount':'10', 'paid_date':timezone.localdate().isoformat(), 'request_key':str(uuid.uuid4())})
+        from tracker.privacy import visible
+        asset=receipt(bill,get_user_model().objects.get(pk=self.client.session['_auth_user_id'])) if visible(Bill,get_user_model().objects.get(pk=self.client.session['_auth_user_id'])).filter(pk=bill.pk).exists() else None
+        return self.post(f'/api/bills/{bill.pk}/payments/', {'receipt_id':str(asset.pk) if asset else '', 'amount':'10', 'paid_date':timezone.localdate().isoformat(), 'request_key':str(uuid.uuid4())})
 
     def enable_pin(self):
         return self.post('/api/security/pin/', {'action':'enable', 'pin':PIN, 'pin_confirmation':PIN, 'password':PASSWORD, 'confirmed':True}, secure=True)

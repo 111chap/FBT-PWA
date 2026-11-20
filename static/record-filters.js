@@ -55,7 +55,23 @@
       return {number:index+1,due_date:next.toISOString().slice(0,10),amount:((index===count-1?cents-each*(count-1):each)/100).toFixed(2)};
     });
   }
-  const api = {filterRecords, loanSummaries, sortRecords, paidHistory, identityKey, loanSchedule, STATUS_RANK};
+  function nextUnpaid(bills){
+    const first=new Map(),singles=[];
+    for(const b of bills){
+      if(b.removed||Number(b.balance)<=0)continue;
+      if(!b.loan_id){singles.push(b);continue;}
+      const old=first.get(b.loan_id);
+      if(!old||b.due_date<old.due_date||(b.due_date===old.due_date&&b.id<old.id))first.set(b.loan_id,b);
+    }
+    return sortRecords([...singles,...first.values()]);
+  }
+  function personalTotals(bills,userId,day){
+    const eligible=bills.filter(b=>!b.removed&&b.ordinary_visible!==false&&Number(b.balance)>0);
+    const sum=items=>items.reduce((n,b)=>n+Math.round(Number(b.balance)*100),0)/100;
+    const mine=eligible.filter(b=>b.responsible_id===userId);
+    return {personal:sum(mine),month:sum(mine.filter(b=>b.due_date.slice(0,7)===day.slice(0,7))),family:sum(eligible.filter(b=>(b.visibility||'family')==='family')),count:mine.length};
+  }
+  const api = {nextUnpaid, personalTotals, filterRecords, loanSummaries, sortRecords, paidHistory, identityKey, loanSchedule, STATUS_RANK};
   if(typeof module !== 'undefined') module.exports = api;
   else root.FBTFilters = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -25,7 +25,7 @@ class PerformanceTests(StaticLiveServerTestCase):
         admin=get_user_model().objects.create_superuser('qa-admin',password='Fictional-QA-passphrase-123!')
         loan=Loan.objects.create(title='Fictional household loan',total='12000',installments=120,created_by=admin)
         bills=Bill.objects.bulk_create([Bill(title=f'Power {i:04}',amount=Decimal('100'),due_date=date(2027,1,31),responsible=admin,created_by=admin,loan=loan if i<120 else None) for i in range(2000)])
-        Payment.objects.bulk_create([Payment(bill=bill,amount=Decimal('100'),paid_date=date(2026,1,1),recorded_by=admin,request_key=uuid.uuid4()) for bill in bills[1000:]])
+        Payment.objects.bulk_create([Payment(receipt_required=False,bill=bill,amount=Decimal('100'),paid_date=date(2026,1,1),recorded_by=admin,request_key=uuid.uuid4()) for bill in bills[1000:]])
         self.client.force_login(admin)
         with CaptureQueriesContext(connection) as queries:
             start=time.perf_counter();response=self.client.get('/api/snapshot/');elapsed=(time.perf_counter()-start)*1000

@@ -4,6 +4,7 @@ x-app: &app
   image: fbt-pwa:local
   env_file: ${FBT_ENV_FILE:-.env}
   environment: &environment
+    FBT_MEDIA_ROOT: /app/media
     POSTGRES_HOST: db
     POSTGRES_DB: fbt
     POSTGRES_USER: fbt
@@ -43,6 +44,8 @@ services:
         condition: service_healthy
   web:
     <<: *app
+    volumes:
+      - media_data:/app/media
     ports:
       - "127.0.0.1:${FBT_PORT:-8787}:8000"
     depends_on:
@@ -55,6 +58,8 @@ services:
       retries: 3
   worker:
     <<: *app
+    volumes:
+      - media_data:/app/media
     command: ["python", "manage.py", "reminder_worker"]
     depends_on:
       init:
@@ -66,3 +71,4 @@ services:
       retries: 3
 volumes:
   postgres_data:
+  media_data:

@@ -1,3 +1,4 @@
+const {attachReceipt}=require('./browser-media-helper.cjs');
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -53,7 +54,7 @@ async function main() {
     await page.locator('#bill-view-filters [name=max]').fill('');
     await page.locator('.pay-bill').first().click();
     await page.locator('#payment-form [name=amount]').fill('1');
-    await page.locator('#payment-form .primary').click();
+    await attachReceipt(page);await page.locator('#payment-form .primary').click();
     assert.match(await page.locator('.review-dialog').innerText(),/Remaining after payment/);
     await page.locator('.review-dialog .secondary').click();
     await page.locator('#payment-dialog .close-dialog').click();

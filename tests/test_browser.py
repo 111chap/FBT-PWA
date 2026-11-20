@@ -16,6 +16,11 @@ import uuid
 @skipUnless(os.getenv('FBT_BROWSER_TESTS') == '1', 'Set FBT_BROWSER_TESTS=1 to run real-browser checks.')
 @override_settings(SECURE_SSL_REDIRECT=False, SESSION_COOKIE_SECURE=False, CSRF_COOKIE_SECURE=False, ALLOWED_HOSTS=['localhost','127.0.0.1','testserver'])
 class BrowserWorkflowTests(StaticLiveServerTestCase):
+    def test_remaining_notes_receipts_qr_and_totals(self):
+        get_user_model().objects.create_superuser('qa-admin',password='Fictional-QA-passphrase-123!')
+        result=subprocess.run([shutil.which('node'),str(settings.BASE_DIR/'tests/browser-remaining-features.cjs'),self.live_server_url],cwd=settings.BASE_DIR,text=True,encoding='utf-8',capture_output=True,timeout=180)
+        self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
+
     @override_settings(SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https'))
     def test_privacy_pin_and_one_time_bill_mobile(self):
         admin=get_user_model().objects.create_superuser('qa-admin',password='Fictional-QA-passphrase-123!')
@@ -37,7 +42,7 @@ class BrowserWorkflowTests(StaticLiveServerTestCase):
         loan=Loan.objects.create(title='Fictional repayment',total='100',installments=1,created_by=admin)
         for title,parent,paid in [('Unpaid utility',None,False),('Paid utility',None,True),('Loan installment',loan,False)]:
             bill=Bill.objects.create(title=title,amount='100',due_date=timezone.localdate(),responsible=admin,created_by=admin,loan=parent)
-            if paid:Payment.objects.create(bill=bill,amount='100',paid_date=timezone.localdate(),recorded_by=admin,request_key=uuid.uuid4())
+            if paid:Payment.objects.create(receipt_required=False,bill=bill,amount='100',paid_date=timezone.localdate(),recorded_by=admin,request_key=uuid.uuid4())
         result=subprocess.run([shutil.which('node'),str(settings.BASE_DIR/'tests/browser-ui-consistency.cjs'),self.live_server_url],cwd=settings.BASE_DIR,text=True,encoding='utf-8',capture_output=True,timeout=120)
         self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
 
@@ -47,7 +52,7 @@ class BrowserWorkflowTests(StaticLiveServerTestCase):
         loan=Loan.objects.create(title='Paid bicycle',total='200',installments=2,created_by=admin)
         for title,amount,parent,paid in [('Paid water','100',None,True),('Bike 1','100',loan,True),('Bike 2','100',loan,True),('Electricity','90',None,False)]:
             bill=Bill.objects.create(title=title,amount=amount,due_date=timezone.localdate(),responsible=member,created_by=admin,loan=parent)
-            if paid:Payment.objects.create(bill=bill,amount=amount,paid_date=timezone.localdate(),recorded_by=member,request_key=uuid.uuid4())
+            if paid:Payment.objects.create(receipt_required=False,bill=bill,amount=amount,paid_date=timezone.localdate(),recorded_by=member,request_key=uuid.uuid4())
         result=subprocess.run([shutil.which('node'),str(settings.BASE_DIR/'tests/browser-corrections.cjs'),self.live_server_url],cwd=settings.BASE_DIR,text=True,encoding='utf-8',capture_output=True,timeout=180)
         self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
 
@@ -68,7 +73,7 @@ class BrowserWorkflowTests(StaticLiveServerTestCase):
         Bill.objects.create(title='Electricity',amount='90',due_date=timezone.localdate(),created_by=admin,responsible=admin)
         Bill.objects.create(title='Bicycle installment',amount='100',due_date=timezone.localdate(),created_by=admin,responsible=admin,loan=loan)
         paid=Bill.objects.create(title='Water',amount='30',due_date=timezone.localdate(),created_by=admin,responsible=admin)
-        Payment.objects.create(bill=paid,amount='30',paid_date=timezone.localdate(),recorded_by=admin,request_key=uuid.uuid4())
+        Payment.objects.create(receipt_required=False,bill=paid,amount='30',paid_date=timezone.localdate(),recorded_by=admin,request_key=uuid.uuid4())
         result=subprocess.run([shutil.which('node'),str(settings.BASE_DIR/'tests/browser-theme.cjs'),self.live_server_url],cwd=settings.BASE_DIR,text=True,encoding='utf-8',capture_output=True,timeout=180)
         self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
 
@@ -80,7 +85,7 @@ class BrowserWorkflowTests(StaticLiveServerTestCase):
         def bill(title,amount,payer,due=date(2027,1,31),loan=None):
             return Bill.objects.create(title=title,amount=amount,due_date=due,category='Loan' if loan else 'Water',responsible=payer,created_by=admin,loan=loan)
         def pay(target,amount,recorder,paid=date(2025,12,1)):
-            Payment.objects.create(bill=target,amount=amount,paid_date=paid,recorded_by=recorder,request_key=uuid.uuid4())
+            Payment.objects.create(receipt_required=False,bill=target,amount=amount,paid_date=paid,recorded_by=recorder,request_key=uuid.uuid4())
         paid=bill('Sort fixture Delta','100',member,date(2026,1,31))
         pay(paid,'40',admin,date(2026,1,20));pay(paid,'60',member,date(2026,1,25))
         partial=bill('Sort fixture Alpha','200',member);pay(partial,'50',admin)

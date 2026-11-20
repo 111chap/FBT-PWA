@@ -13,9 +13,11 @@ AUDITED_TABLES = ('tracker_bill', 'tracker_payment', 'tracker_loan', 'tracker_re
 
 def trigger_status():
     tables = set(connection.introspection.table_names())
-    audited = AUDITED_TABLES + tuple(t for t in ('tracker_emergencygrant', 'tracker_privacyaccess', 'tracker_pincredential', 'tracker_pindevice') if t in tables)
+    audited = AUDITED_TABLES + tuple(t for t in ('tracker_emergencygrant', 'tracker_privacyaccess', 'tracker_pincredential', 'tracker_pindevice', 'tracker_mediaasset', 'tracker_receiptrevision', 'tracker_paymentqr') if t in tables)
     expected = {f'fbt_audit_{table}_{action}' for table in audited for action in ('insert', 'update', 'delete')}
     expected |= {'fbt_payment_balance', 'fbt_bill_balance'} if connection.vendor == 'postgresql' else {'fbt_payment_balance_insert', 'fbt_payment_balance_update', 'fbt_bill_balance'}
+    if 'tracker_mediaasset' in tables:
+        expected |= {'fbt_payment_evidence','fbt_qr_evidence'} if connection.vendor=='postgresql' else {f'{name}_{action}' for name in ('fbt_payment_evidence','fbt_qr_evidence') for action in ('insert','update')}
     try:
         with connection.cursor() as cursor:
             if connection.vendor == 'postgresql':

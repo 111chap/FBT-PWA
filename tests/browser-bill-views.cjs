@@ -1,3 +1,4 @@
+const {attachReceipt}=require('./browser-media-helper.cjs');
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -118,7 +119,7 @@ async function main() {
     await page.locator('#add-loan').click();await page.locator('#loan-dialog').waitFor();await page.locator('#loan-dialog .close-dialog').click();
     // Completing a bill moves its presentation to history without removing its record.
     await page.goto(base+'/app/#bills');await page.locator('#search').fill('Sort fixture Gamma');
-    await page.locator('#bill-rows .pay-bill').click();await page.locator('#payment-form .primary').click();await page.locator('.review-dialog .primary').click();
+    await page.locator('#bill-rows .pay-bill').click();await attachReceipt(page);await page.locator('#payment-form .primary').click();await page.locator('.review-dialog .primary').click();
     await page.waitForFunction(()=>document.querySelectorAll('#bill-rows tr').length===0);
     await page.goto(base+'/app/#history');await page.locator('#history-filters [type=reset]').click();
     await page.waitForFunction(()=>document.querySelector('#history-filters').elements.payer.value==='');

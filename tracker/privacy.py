@@ -6,7 +6,7 @@ from django.db.models.functions import Cast
 from django.db.models import CharField
 from django.utils import timezone
 from .audit import audit_transaction
-from .models import Bill, Loan, Recurrence, Payment, AuditEvent, EmergencyGrant, PrivacyAccess
+from .models import Bill, Loan, Recurrence, Payment, AuditEvent, EmergencyGrant, PrivacyAccess, MediaAsset, ReceiptRevision
 
 
 def own_or_family(user, prefix=''):
@@ -14,6 +14,11 @@ def own_or_family(user, prefix=''):
 
 
 def visible(model, user):
+    if model is MediaAsset:
+        result=model.objects.filter(bill__in=visible(Bill,user))
+        return result | model.objects.filter(purpose='qr') if user.is_superuser else result
+    if model is ReceiptRevision:
+        return model.objects.filter(payment__in=visible(Payment,user))
     if model is Payment:
         return model.objects.filter(bill__in=visible(Bill, user))
     result = model.objects.filter(own_or_family(user))
@@ -72,8 +77,8 @@ def current_grant(request):
 
 def audit_visible(user):
     allowed = Q()
-    financial = ('bill', 'payment', 'loan', 'recurrence')
-    for name, model in zip(financial, (Bill, Payment, Loan, Recurrence)):
+    financial = ('bill', 'payment', 'loan', 'recurrence', 'attachment', 'evidence')
+    for name, model in zip(financial, (Bill, Payment, Loan, Recurrence, MediaAsset, ReceiptRevision)):
         ids = visible(model, user).annotate(audit_id=Cast('pk', CharField())).values('audit_id')
         allowed |= Q(entity_type=name, entity_id__in=Subquery(ids))
     # Events can retain earlier private text after sharing. Never disclose that
