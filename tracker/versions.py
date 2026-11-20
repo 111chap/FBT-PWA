@@ -9,12 +9,12 @@ def version(values):
 
 
 def bill_version(bill):
-    return version([bill.title, bill.category, bill.notes, bill.loan_id, bill.recurrence_id, str(Decimal(bill.amount).quantize(Decimal('.01'))), bill.due_date, bill.responsible_id,
+    return version([bill.owner_id, bill.visibility, bill.bill_type, bill.title, bill.category, bill.notes, bill.loan_id, bill.recurrence_id, str(Decimal(bill.amount).quantize(Decimal('.01'))), bill.due_date, bill.responsible_id,
                     bill.removed, [(p.pk, p.amount, p.paid_date, p.removed) for p in sorted(bill.payments.all(), key=lambda p:p.pk)]])
 
 
 def recurrence_version(recurrence):
-    return version([recurrence.title, str(Decimal(recurrence.amount).quantize(Decimal('.01'))), recurrence.category,
+    return version([recurrence.owner_id, recurrence.visibility, recurrence.title, str(Decimal(recurrence.amount).quantize(Decimal('.01'))), recurrence.category,
                     recurrence.anchor_day, recurrence.active, recurrence.removed, recurrence.responsible_id, recurrence.next_due])
 
 
@@ -27,5 +27,5 @@ def payment_version(payment):
 
 
 def loan_version(loan,bills):
-    return version([loan.title,loan.total,loan.installments,loan.removed,
+    return version([loan.owner_id, loan.visibility, loan.title,loan.total,loan.installments,loan.removed,
                     [(b.pk,bill_version(b)) for b in sorted(bills,key=lambda b:b.pk)]])

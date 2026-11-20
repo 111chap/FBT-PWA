@@ -1,8 +1,15 @@
 from django.contrib import admin
 from django.urls import path
 from tracker import views, corrections
+from tracker import security, privacy_views
 
 urlpatterns = [
+    path('login/pin/', security.pin_login),
+    path('api/security/pin/', security.pin_settings),
+    path('api/privacy/emergency/', privacy_views.emergency),
+    path('api/privacy/emergency/records/', privacy_views.emergency_records),
+    path('api/privacy/access/', privacy_views.access_history),
+    path('api/privacy/visibility/', privacy_views.visibility),
     path('api/manage/<str:kind>/<int:record_id>/',corrections.correct),
     path('', views.home), path('app/', views.shell),
     path('login/', views.login_view), path('logout/', views.logout_view),

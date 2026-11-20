@@ -13,7 +13,17 @@ class SiteSettings(models.Model):
     nas_name = models.CharField(max_length=80, default='Family NAS')
 
 
-class Loan(models.Model):
+class OwnedRecord(models.Model):
+    # Family is the model default for legacy/imported records. API creation defaults Private.
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT, related_name='+')
+    visibility = models.CharField(max_length=7, choices=[('private', 'Private'), ('family', 'Family')], default='family')
+
+    class Meta:
+        abstract = True
+        constraints = [models.CheckConstraint(condition=Q(visibility='family') | Q(visibility='private', owner__isnull=False), name='%(class)s_valid_privacy')]
+
+
+class Loan(OwnedRecord):
     removed = models.BooleanField(default=False)
     title = models.CharField(max_length=100)
     total = models.DecimalField(max_digits=12, decimal_places=2)
@@ -22,7 +32,7 @@ class Loan(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
-class Recurrence(models.Model):
+class Recurrence(OwnedRecord):
     title = models.CharField(max_length=100)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     category = models.CharField(max_length=40, default='Household')
@@ -34,7 +44,8 @@ class Recurrence(models.Model):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='+')
 
 
-class Bill(models.Model):
+class Bill(OwnedRecord):
+    bill_type = models.CharField(max_length=9, choices=[('utilities', 'Utilities'), ('loan', 'Loan'), ('one-time', 'One-time bill')], default='utilities')
     title = models.CharField(max_length=100)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     due_date = models.DateField()
@@ -49,7 +60,7 @@ class Bill(models.Model):
 
     class Meta:
         ordering = ['due_date', 'id']
-        constraints = [models.CheckConstraint(condition=Q(amount__gt=0), name='bill_positive_amount'), models.UniqueConstraint(fields=['recurrence', 'due_date'], name='unique_recurring_occurrence')]
+        constraints = [*OwnedRecord.Meta.constraints, models.CheckConstraint(condition=Q(bill_type__in=['utilities', 'loan', 'one-time']) & (~Q(bill_type='one-time') | Q(loan__isnull=True, recurrence__isnull=True)), name='valid_bill_type'), models.CheckConstraint(condition=Q(amount__gt=0), name='bill_positive_amount'), models.UniqueConstraint(fields=['recurrence', 'due_date'], name='unique_recurring_occurrence')]
 
     @property
     def paid(self):
@@ -100,6 +111,45 @@ class ReminderDelivery(models.Model):
 class LoginFailure(models.Model):
     key = models.CharField(max_length=64, db_index=True)
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+
+class EmergencyGrant(models.Model):
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    reason = models.CharField(max_length=500)
+    expires_at = models.DateTimeField()
+    ended_at = models.DateTimeField(null=True)
+
+
+class PrivacyAccess(models.Model):
+    grant = models.ForeignKey(EmergencyGrant, on_delete=models.PROTECT)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    action = models.CharField(max_length=20)
+    record_type = models.CharField(max_length=12, blank=True)
+    record_id = models.PositiveBigIntegerField(null=True)
+    occurred_at = models.DateTimeField(default=timezone.now)
+
+
+class PinCredential(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    pin_hash = models.CharField(max_length=256, blank=True)
+    failures = models.PositiveIntegerField(default=0)
+    strikes = models.PositiveIntegerField(default=0)
+    blocked_until = models.DateTimeField(null=True)
+
+
+class PinDevice(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    verifier = models.CharField(max_length=64, unique=True)
+    password_stamp = models.CharField(max_length=64)
+    expires_at = models.DateTimeField()
+    revoked = models.BooleanField(default=False)
+    created_at = models.DateTimeField(default=timezone.now)
+
+
+class PinNetwork(models.Model):
+    key = models.CharField(max_length=64, primary_key=True)
+    attempts = models.PositiveIntegerField(default=0)
+    window_start = models.DateTimeField(default=timezone.now)
 
 
 class MutationReceipt(models.Model):

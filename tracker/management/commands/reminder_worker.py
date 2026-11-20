@@ -23,6 +23,10 @@ class Command(BaseCommand):
                     WorkerHeartbeat.objects.select_for_update().get(name='reminders')
                     materialize_recurring()
                     deliver_reminders()
+                    from tracker.models import EmergencyGrant
+                    from tracker.privacy import end_grant
+                    for grant in EmergencyGrant.objects.select_for_update().filter(ended_at=None, expires_at__lte=timezone.now()):
+                        end_grant(grant, 'expired')
                     LoginFailure.objects.filter(created_at__lt=timezone.now() - timedelta(days=1)).delete()
                     WorkerHeartbeat.objects.filter(name='reminders').update(updated_at=timezone.now(), detail='Schedule checked successfully')
             except Exception:

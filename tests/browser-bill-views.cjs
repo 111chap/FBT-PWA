@@ -103,7 +103,7 @@ async function main() {
     await page.locator('#loan-form .primary').click();assert.match(await page.locator('.review-dialog').innerText(),/Installment 3/);
     await page.locator('.review-dialog .secondary').click();assert.equal((await snapshot()).bills.length,initial.bills.length);
     await page.locator('#loan-form .primary').click();await page.locator('.review-dialog .primary').click();await page.locator('#loan-dialog').waitFor({state:'hidden'});
-    await page.locator('#toast').filter({hasText:'Saved for your family.'}).waitFor({state:'visible'});
+    await page.locator('#toast').filter({hasText:'Saved privately for your account.'}).waitFor({state:'visible'});
     const after=await snapshot();assert(Array.isArray(after.loans),JSON.stringify(after));assert(Array.isArray(initial.loans),JSON.stringify(initial));assert.equal(after.loans.length,initial.loans.length+1);assert.equal(after.bills.length,initial.bills.length+3);assert(!after.bills.some(b=>b.title==='Utilities draft'));
     const created=after.bills.filter(b=>b.title.startsWith('Guided car'));assert.deepEqual(created.map(b=>b.amount),['333.33','333.33','333.34']);
     await page.goto(base+'/app/#loans');await page.locator('#loan-rows tr').first().waitFor();

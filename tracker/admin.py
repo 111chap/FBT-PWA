@@ -6,9 +6,15 @@ from django.core import signing
 from django.http import HttpResponse
 from .versions import version
 from .models import Bill, Payment, Loan, Recurrence, AuditEvent
+from .privacy import visible, audit_visible
 
 
 class ReadOnlyAdmin(admin.ModelAdmin):
+    def get_queryset(self, request):
+        if self.model is AuditEvent:
+            return audit_visible(request.user)
+        return visible(self.model, request.user)
+
     def has_add_permission(self, request):
         return False
 

@@ -8,7 +8,7 @@ This application is an early development build for a single household, not a fin
 - Production HTTPS redirects and secure, HTTP-only session cookies. Trusted proxy mode must only be used with an isolated app port and a proxy that overwrites forwarded headers.
 - First-administrator setup requires a private enrollment code and closes after account creation.
 - Database-backed login attempt limits: five failed attempts per account in 15 minutes. This also means an attacker can temporarily lock an account; keep the app private to your home network.
-- Server configuration changes require the administrator. Ordinary members intentionally share all family bills.
+- Server configuration changes require the administrator. Family records are shared; Private records are owner-only. Administrator emergency visibility is password-confirmed, logged, read-only, session-scoped, and limited to 10 minutes.
 - Payment amounts use decimal arithmetic. PostgreSQL transactions lock the bill while checking its current balance. Payment references make retries idempotent.
 - Push subscriptions use an explicit provider host allowlist to avoid sending requests to arbitrary URLs. The app never fetches a server address entered in settings.
 - API responses are not HTTP-cacheable. Offline snapshots require explicit device opt-in, expire after seven days, and are cleared on sign-out and rejected sessions.
@@ -21,7 +21,8 @@ This application is an early development build for a single household, not a fin
 - Revocation and session expiry cannot be checked offline. A saved copy may be visible until it expires or is removed locally.
 - The app does not control NAS administration, DNS, certificate provisioning, router access, or independent backup storage.
 - Notifications are best-effort. Push service acceptance does not prove device receipt.
-- Multi-factor authentication, per-bill visibility restrictions, and configurable reminder policies are not implemented in this first version. Audit history is read-only; payment correction workflows are still pending.
+- A short PIN is a convenience credential, not multi-factor authentication. PINs require password-enrolled devices, salted slow hashes, secure cookies, persistent account/network limits, and password fallback. See [PIN controls and privacy boundaries](docs/PRIVACY-PIN-AND-BILL-TYPES.md).
+- Application privacy does not protect against NAS/database/backup operators or malicious administrators with account-recovery powers. Security checks reduce risk; they do not establish that the application or household network is risk-free.
 
 ## Tests
 

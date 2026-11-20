@@ -2,12 +2,13 @@
 
 A self-hosted family bill and loan repayment tracker for Android, iPhone, and desktop browsers. Keep due dates, manual payments, and reminders together on a family NAS.
 
-**Stage: first working development version.** Local browser and Docker/PostgreSQL checks passed. It is not yet deployed to the family NAS or verified on physical phones. See the [verification record](docs/VERIFICATION.md).
+**Stage: working development application.** Validate each release on your NAS and phones after backing up. See the [verification record](docs/VERIFICATION.md) and [privacy/PIN upgrade notes](docs/PRIVACY-PIN-AND-BILL-TYPES.md).
 
 ## What works
 
-- Shared family accounts, one-time administrator enrollment, and sign-in.
-- Guided Utilities/Loan entry, live installment previews, partial/full payments, and CSV export.
+- Family accounts, one-time administrator enrollment, password sign-in, and optional PIN sign-in on enrolled devices.
+- Private and Family bills, owner management, and logged, password-confirmed emergency administrator visibility.
+- Guided Utilities/Loan/One-time bill entry, live installment previews, partial/full payments, and CSV export.
 - Shared paid-bills history with payer/recorder filters and read-only offline access.
 - Clickable bill headings for alphabetical, date, original/unpaid amount, and status sorting.
 - Monthly fixed-amount recurring bills and agreed loan installment schedules.

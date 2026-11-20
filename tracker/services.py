@@ -70,7 +70,7 @@ def materialize_recurring(today=None):
                 continue
             count = 0
             while recurrence.next_due <= today + timedelta(days=30) and count < 24:
-                Bill.objects.get_or_create(recurrence=recurrence, due_date=recurrence.next_due, defaults={'title': recurrence.title, 'amount': recurrence.amount, 'category': recurrence.category, 'responsible': recurrence.responsible, 'created_by': recurrence.created_by})
+                Bill.objects.get_or_create(recurrence=recurrence, due_date=recurrence.next_due, defaults={'owner_id': recurrence.owner_id, 'visibility': recurrence.visibility, 'title': recurrence.title, 'amount': recurrence.amount, 'category': recurrence.category, 'responsible': recurrence.responsible, 'created_by': recurrence.created_by})
                 recurrence.next_due = next_month(recurrence.next_due, recurrence.anchor_day)
                 count += 1
             recurrence.save(update_fields=['next_due'])
@@ -87,6 +87,9 @@ def deliver_reminders(now=None):
         if bill.balance <= 0:
             continue
         for subscription in PushSubscription.objects.filter(user__is_active=True):
+            from .privacy import visible
+            if not visible(Bill, subscription.user).filter(pk=bill.pk).exists():
+                continue
             delivery, _ = ReminderDelivery.objects.get_or_create(bill=bill, subscription=subscription, day=local.date())
             if delivery.delivered_at or delivery.attempts >= 3:
                 continue

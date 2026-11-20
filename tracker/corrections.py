@@ -10,6 +10,7 @@ from django.views.decorators.http import require_POST
 from .models import Bill, Loan, Payment, Recurrence
 from .audit import correction_reason
 from .idempotency import idempotent
+from .privacy import visible, require_manage
 from .versions import bill_version, loan_version, payment_version
 from .views import api, body, label, text, money, parsed_date, User
 
@@ -31,12 +32,13 @@ def allocation(total,bills):
     return result
 
 
-def administrator(view):
+def authorized_actor(view):
     @wraps(view)
     def wrapped(request,*args,**kwargs):
         with transaction.atomic():
             actor=User.objects.select_for_update().get(pk=request.user.pk)
-            if not actor.is_active or not actor.is_superuser:return JsonResponse({'error':'Only the family administrator can correct financial records.'},status=403)
+            if not actor.is_active:return JsonResponse({'error':'Sign in with an active account before correcting records.'},status=403)
+            request.user=actor
             return view(request,*args,**kwargs)
     return wrapped
 
@@ -45,11 +47,12 @@ def stale():
     return JsonResponse({'error':'This record or its related records changed. Refresh and review the correction again.'},status=409)
 
 
-def lock_bill(bill_id):
-    target=Bill.objects.get(pk=bill_id)
+def lock_bill(bill_id, user):
+    target=visible(Bill,user).get(pk=bill_id)
     loan=Loan.objects.select_for_update().get(pk=target.loan_id,removed=False) if target.loan_id else None
     if target.recurrence_id:Recurrence.objects.select_for_update().get(pk=target.recurrence_id)
-    bill=Bill.objects.select_for_update().get(pk=bill_id,removed=False)
+    bill=visible(Bill,user).select_for_update().get(pk=bill_id,removed=False)
+    require_manage(user,bill)
     return bill,loan
 
 
@@ -63,7 +66,7 @@ def reconcile(loan):
 
 @require_POST
 @api
-@administrator
+@authorized_actor
 @idempotent
 def correct(request,kind,record_id):
     data=body(request)
@@ -74,7 +77,8 @@ def correct(request,kind,record_id):
     if kind not in ('bill','loan','payment') or action not in ('edit','delete'):raise ValidationError('Choose a valid record and correction action.')
     with transaction.atomic():
         if kind=='loan':
-            loan=Loan.objects.select_for_update().get(pk=record_id,removed=False)
+            loan=visible(Loan,request.user).select_for_update().get(pk=record_id,removed=False)
+            require_manage(request.user,loan)
             bills=list(Bill.objects.select_for_update().filter(loan=loan,removed=False).order_by('pk').prefetch_related('payments'))
             if not bills or data.get('expected_version')!=loan_version(loan,bills):return stale()
             correction_reason(reason)
@@ -89,8 +93,8 @@ def correct(request,kind,record_id):
                     if amount!=bill.amount:bill.amount=amount;bill.save(update_fields=['amount'])
                 loan.title=title;loan.total=total;loan.installments=len(bills);loan.save(update_fields=['title','total','installments'])
         else:
-            payment=Payment.objects.get(pk=record_id,removed=False) if kind=='payment' else None
-            bill,loan=lock_bill(payment.bill_id if payment else record_id)
+            payment=visible(Payment,request.user).get(pk=record_id,removed=False) if kind=='payment' else None
+            bill,loan=lock_bill(payment.bill_id if payment else record_id, request.user)
             if loan:
                 siblings=list(Bill.objects.filter(loan=loan,removed=False).prefetch_related('payments'))
                 if data.get('expected_loan_version')!=loan_version(loan,siblings):return stale()
@@ -113,6 +117,8 @@ def correct(request,kind,record_id):
                     amount=money(data['amount'])
                     if amount<bill.paid:raise ValidationError('Correct or delete recorded payments before reducing this bill below its paid amount.')
                     payer=int(data['responsible'])
+                    if bill.visibility == 'private' and payer != request.user.pk:
+                        raise ValidationError('A private bill must keep its owner as primary payer.')
                     new=(label(data,'title',100),amount,parsed_date(data['due_date']),label(data,'category',40),text(data,'notes',500),payer)
                     if new==(bill.title,bill.amount,bill.due_date,bill.category,bill.notes,bill.responsible_id):raise ValidationError('No bill changes to save.')
                     if payer!=bill.responsible_id:bill.responsible=User.objects.get(pk=payer,is_active=True)

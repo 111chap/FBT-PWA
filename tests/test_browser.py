@@ -16,6 +16,16 @@ import uuid
 @skipUnless(os.getenv('FBT_BROWSER_TESTS') == '1', 'Set FBT_BROWSER_TESTS=1 to run real-browser checks.')
 @override_settings(SECURE_SSL_REDIRECT=False, SESSION_COOKIE_SECURE=False, CSRF_COOKIE_SECURE=False, ALLOWED_HOSTS=['localhost','127.0.0.1','testserver'])
 class BrowserWorkflowTests(StaticLiveServerTestCase):
+    @override_settings(SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https'))
+    def test_privacy_pin_and_one_time_bill_mobile(self):
+        admin=get_user_model().objects.create_superuser('qa-admin',password='Fictional-QA-passphrase-123!')
+        member=get_user_model().objects.create_user('qa-member',password='Fictional-QA-passphrase-123!')
+        Bill.objects.create(title='Private fictional school fee',amount='100',due_date=timezone.localdate(),owner=member,visibility='private',created_by=member,responsible=member)
+        Bill.objects.create(title='Shared fictional water',amount='100',due_date=timezone.localdate(),owner=admin,visibility='family',created_by=admin,responsible=admin)
+        with self.settings(CSRF_TRUSTED_ORIGINS=[self.live_server_url]):
+            result=subprocess.run([shutil.which('node'),str(settings.BASE_DIR/'tests/browser-privacy-pin.cjs'),self.live_server_url],cwd=settings.BASE_DIR,text=True,encoding='utf-8',capture_output=True,timeout=180)
+        self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
+
     def test_mobile_navigation_geometry_and_readable_header(self):
         get_user_model().objects.create_superuser('qa-admin', password='Fictional-QA-passphrase-123!')
         SiteSettings.objects.create(family_name='A fictional household with a longer display name')
