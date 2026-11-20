@@ -8,7 +8,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
-from .models import Bill, Recurrence, ReminderDelivery, PushSubscription
+from .models import Bill, Recurrence, ReminderDelivery, PushSubscription, WorkerHeartbeat
 from .audit import audited
 
 
@@ -82,9 +82,14 @@ def deliver_reminders(now=None):
     local = timezone.localtime(now)
     if not push_ready() or local.hour < 9 or local.hour >= 20:
         return
-    # One worker is enforced with a database lock in the worker command.
-    for bill in Bill.objects.filter(removed=False, due_date__lte=local.date() + timedelta(days=3)).prefetch_related('payments'):
-        if bill.balance <= 0:
+    # Also serialize direct/manual invocations, not just the worker command.
+    WorkerHeartbeat.objects.get_or_create(name='reminder-dispatch')
+    WorkerHeartbeat.objects.select_for_update().get(name='reminder-dispatch')
+    for bill in Bill.objects.filter(removed=False, due_date__lte=local.date() + timedelta(days=7)).prefetch_related('payments'):
+        days=(bill.due_date-local.date()).days
+        if days>0 and days not in (7,3,1):
+            continue
+        if bill.balance <= 0 or (bill.loan_id and bill.loan.removed) or (bill.recurrence_id and (not bill.recurrence.active or bill.recurrence.removed)):
             continue
         for subscription in PushSubscription.objects.filter(user__is_active=True):
             from .privacy import visible
@@ -96,10 +101,11 @@ def deliver_reminders(now=None):
             delivery.attempts += 1
             delivery.save(update_fields=['attempts'])
             # Fresh balance check immediately before dispatch.
-            if Bill.objects.get(pk=bill.pk).balance <= 0:
+            if Bill.objects.get(pk=bill.pk).balance <= 0 or not visible(Bill, subscription.user).filter(pk=bill.pk,removed=False).exists() or (bill.recurrence_id and not Recurrence.objects.filter(pk=bill.recurrence_id,active=True,removed=False).exists()):
                 continue
             try:
-                send_push(subscription, 'A family payment needs a look', 'Open Family Bill Tracker to review upcoming or overdue payments.')
+                milestone = f'due in {days} days' if days in (7,3) else 'due tomorrow' if days==1 else 'due today' if days==0 else 'overdue'
+                send_push(subscription, f'A payment is {milestone}', 'Open Family Bill Tracker on your home network to review your authorized payments.')
                 delivery.delivered_at = timezone.now()
                 delivery.save(update_fields=['delivered_at'])
             except Exception as error:

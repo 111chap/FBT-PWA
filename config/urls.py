@@ -1,9 +1,16 @@
 from django.contrib import admin
 from django.urls import path
 from tracker import views, corrections
-from tracker import security, privacy_views
+from tracker import security, privacy_views, record_views, media_views
 
 urlpatterns = [
+    path('api/descriptions/<str:kind>/<int:record_id>/',record_views.description),
+    path('api/media/upload/',media_views.upload),
+    path('api/media/<uuid:asset_id>/',media_views.image),
+    path('api/payment-qr/',media_views.qr_status),
+    path('api/payment-qr/configure/',media_views.configure_qr),
+    path('api/payments/<int:payment_id>/evidence/',media_views.evidence),
+    path('api/payments/<int:payment_id>/evidence/replace/',media_views.replace_evidence),
     path('login/pin/', security.pin_login),
     path('api/security/pin/', security.pin_settings),
     path('api/privacy/emergency/', privacy_views.emergency),

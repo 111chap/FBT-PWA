@@ -6,6 +6,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.db import transaction, IntegrityError
 from django.test import TestCase, override_settings
+from tests.media_helpers import receipt
 from tracker.models import Bill, Payment, Loan, AuditEvent, AuditContext
 
 
@@ -16,7 +17,7 @@ class CorrectionTests(TestCase):
         self.member=get_user_model().objects.create_user('correction-member',password='Fictional-passphrase-456!')
         self.client.force_login(self.admin)
         self.bill=Bill.objects.create(title='Fictional water',amount='100',due_date=date(2026,1,1),responsible=self.member,created_by=self.admin)
-        self.payment=Payment.objects.create(bill=self.bill,amount='100',paid_date=date(2026,1,1),recorded_by=self.member,request_key=uuid.uuid4())
+        self.payment=Payment.objects.create(receipt_required=False,bill=self.bill,amount='100',paid_date=date(2026,1,1),recorded_by=self.member,request_key=uuid.uuid4())
 
     def snapshot(self):return self.client.get('/api/snapshot/').json()
     def bill_data(self,bill=None):return next(b for b in self.snapshot()['bills'] if b['id']==(bill or self.bill).pk)
@@ -51,9 +52,9 @@ class CorrectionTests(TestCase):
         data=self.payload('payment',action='delete');self.assertEqual(self.post('payment',data).status_code,200)
         self.payment.refresh_from_db();self.assertTrue(self.payment.removed);self.assertEqual(self.bill_data()['balance'],'100.00');self.assertEqual(self.bill_data()['payments'],[])
         self.assertEqual(self.post('payment',data).status_code,200)
-        response=self.client.post(f'/api/bills/{self.bill.pk}/payments/',json.dumps({'amount':'100','paid_date':'2026-01-01','request_key':str(uuid.uuid4())}),content_type='application/json')
+        response=self.client.post(f'/api/bills/{self.bill.pk}/payments/',json.dumps({'receipt_id':str(receipt(self.bill,self.admin).pk),'amount':'100','paid_date':'2026-01-01','request_key':str(uuid.uuid4())}),content_type='application/json')
         self.assertEqual(response.status_code,201)
-        with self.assertRaises(IntegrityError),transaction.atomic():Payment.objects.create(bill=self.bill,amount='1',paid_date=date(2026,1,1),recorded_by=self.admin,request_key=uuid.uuid4())
+        with self.assertRaises(IntegrityError),transaction.atomic():Payment.objects.create(receipt_required=False,bill=self.bill,amount='1',paid_date=date(2026,1,1),recorded_by=self.admin,request_key=uuid.uuid4())
 
     def test_invalid_reductions_and_future_payment_leave_no_logs(self):
         before=AuditEvent.objects.count()
@@ -108,7 +109,7 @@ class CorrectionTests(TestCase):
 
     def test_fully_paid_loan_can_be_edited_and_deleted(self):
         loan,second=self.make_loan()
-        Payment.objects.create(bill=second,amount='100',paid_date=date(2026,1,1),recorded_by=self.member,request_key=uuid.uuid4())
+        Payment.objects.create(receipt_required=False,bill=second,amount='100',paid_date=date(2026,1,1),recorded_by=self.member,request_key=uuid.uuid4())
         edit=self.payload('loan',obj=loan,title='Paid loan correction',total='220')
         self.assertEqual(self.post('loan',edit,loan).status_code,200)
         second.refresh_from_db();self.assertEqual(second.balance,Decimal('20'))

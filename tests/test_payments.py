@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from tracker.models import Bill, Payment, Loan, Recurrence
+from tests.media_helpers import receipt
 from tracker.services import materialize_recurring
 
 
@@ -17,7 +18,10 @@ class PaymentTests(TestCase):
         self.bill=Bill.objects.create(title='Internet',amount='1000.00',due_date=timezone.localdate(),responsible=self.user,created_by=self.user)
 
     def pay(self,amount,key=None):
-        return self.client.post(f'/api/bills/{self.bill.pk}/payments/',json.dumps({'amount':amount,'paid_date':timezone.localdate().isoformat(),'request_key':key or str(uuid.uuid4())}),content_type='application/json')
+        key=key or str(uuid.uuid4())
+        if not hasattr(self,'receipts'):self.receipts={}
+        if key not in self.receipts:self.receipts[key]=str(receipt(self.bill,self.user).pk)
+        return self.client.post(f'/api/bills/{self.bill.pk}/payments/',json.dumps({'amount':amount,'paid_date':timezone.localdate().isoformat(),'request_key':key,'receipt_id':self.receipts[key]}),content_type='application/json')
 
     def test_partial_payment_changes_balance_and_full_payment_marks_paid(self):
         self.assertEqual(self.pay('400.00').status_code,201)

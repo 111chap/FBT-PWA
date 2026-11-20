@@ -4,6 +4,7 @@
   const $ = id => document.getElementById(id);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
   FBTSecurity.configure({request:api,refresh:loadSnapshot,notify:toast,emergency:loadEmergency});
+  FBTEnhancements.configure({request:api,refresh:loadSnapshot,notify:toast});
   FBTCorrections.configure({request:api,refresh:loadSnapshot,notify:toast});
   let data = null, connected = false, pendingRefresh = false, checking = false, signingOut = false;
   let auditEvents = [], auditPageNumber = 1, auditTransaction = '', selectedAudit = null, auditRequest = 0;
@@ -82,7 +83,7 @@
   function setConnection(value) {
     connected = value;
     if(data?.emergency&&!value){location.reload();return;}
-    if(data)FBTSecurity.update(data,value);
+    if(data){FBTSecurity.update(data,value);FBTEnhancements.update(data,value,pendingRefresh);}
     if(data){FBTProfile.update(data,connected);FBTCorrections.update(data,connected,pendingRefresh);}
     $('connection-badge').className = 'badge ' + (value ? 'healthy' : 'warning');
     $('connection-badge').textContent = value ? '● Home server connected' : '○ Offline · read-only';
@@ -114,7 +115,7 @@
     if (!data) return;
     const search = $('search').value.toLowerCase();
     const filter = $('status-filter').value;
-    const bills = FBTFilters.filterRecords(data.bills.filter(b=>Number(b.balance)>0&&($('type-filter').value==='all'||(b.loan_id?'loan':b.bill_type||'utilities')===$('type-filter').value)), {...viewFilters('bill'), search, status:filter, sort:billSort});
+    const bills = FBTFilters.filterRecords(FBTFilters.nextUnpaid(data.bills).filter(b=>($('type-filter').value==='all'||(b.loan_id?'loan':b.bill_type||'utilities')===$('type-filter').value)), {...viewFilters('bill'), search, status:filter, sort:billSort});
     billPage=pageControls('bill',billPage,bills.length);
     $('bill-rows').innerHTML=bills.slice((billPage-1)*listPageSize,billPage*listPageSize).map(row).join('');
     $('bills-empty').hidden = bills.length > 0;
@@ -184,7 +185,7 @@
       return `<tr><td><button class="bill-detail" data-id="${bill.id}">${esc(bill.title)}</button><span class="small muted">${esc(bill.bill_type==='one-time'?'One-time bill':bill.loan_id?'Loan':'Utilities')} · ${esc(bill.visibility||'family')} · ${esc(bill.category)} · Primary payer: ${esc(bill.responsible)}${loan?` · Loan: ${esc(loan.title)}`:''}</span></td><td data-label="Due date">${dateLabel(bill.due_date)}</td><td data-label="Original amount">${currency(bill.amount)}</td><td data-label="Total paid">${currency(bill.total_paid)}</td><td data-label="Date fully paid">${dateLabel(bill.completed_date)}</td><td><button class="button secondary bill-detail" data-id="${bill.id}">Review payments</button></td></tr>`;
     }).join('');
     $('history-empty').hidden=records.length>0;
-    $('history-summary').textContent=invalid?'Check the date and amount ranges: minimum must not exceed maximum.':`${records.length} fully paid bill${records.length===1?'':'s'} · Shared family history · Saved ${stamp(data.synced_at)}`;
+    $('history-summary').textContent=invalid?'Check the date and amount ranges: minimum must not exceed maximum.':`${records.length} fully paid bill${records.length===1?'':'s'} · Your accessible history · Saved ${stamp(data.synced_at)}`;
     $('history-page').textContent=`Page ${historyPage} of ${pages}`;
     $('history-previous').disabled=historyPage<=1; $('history-next').disabled=historyPage>=pages;
     updateSortHeadings('history');
@@ -220,6 +221,8 @@
     $('detail-recurrence').textContent = recurrence ? `Monthly: day ${recurrence.anchor_day} (last valid day in shorter months). Schedule ${recurrence.active ? 'active' : 'cancelled'}.` : '';
     $('detail-actions').innerHTML = (data.user.admin && bill.can_manage && !data.emergency) ? `<button class="button secondary reassign-payer" data-id="${bill.id}" data-online aria-label="Change primary payer">Change payer</button>${FBTCorrections.controls('bill',bill.id)}` : FBTCorrections.controls('bill',bill.id);
     const sharedRecord=bill.loan_id?data.loans.find(r=>r.id===bill.loan_id):recurrence||bill;
+    $('detail-actions').innerHTML+=FBTEnhancements.descriptionControl(bill.loan_id?'loan':recurrence?'recurrence':'bill',sharedRecord);
+    $('detail-actions').innerHTML+=FBTEnhancements.qrButton();
     $('detail-actions').innerHTML+=FBTSecurity.sharingControl(bill.loan_id?'loan':recurrence?'recurrence':'bill',sharedRecord);
     setConnection(connected);
   }
@@ -270,8 +273,8 @@
     $('detail-title').textContent=loan.title;
     $('detail-summary').textContent=`${currency(loan.total)} agreed total · ${currency(bills.reduce((sum,b)=>sum+Math.round(Number(b.balance)*100),0)/100)} unpaid · ${loan.installments} installments`;
     $('detail-recurrence').textContent='Monthly repayment schedule';
-    $('detail-actions').innerHTML=FBTCorrections.controls('loan',loan.id)+FBTSecurity.sharingControl('loan',loan);
-    $('detail-notes').textContent='Select an installment to review its bill and recorded payments.';
+    $('detail-actions').innerHTML=FBTCorrections.controls('loan',loan.id)+FBTSecurity.sharingControl('loan',loan)+FBTEnhancements.descriptionControl('loan',loan)+FBTEnhancements.qrButton();
+    $('detail-notes').textContent=`Current shared description: ${loan.description||'None added.'}\n\nSelect an installment to review its own notes, bill and payment evidence.`;
     $('detail-payments').innerHTML=bills.map(b=>`<div class="activity"><div><button class="bill-detail" data-id="${b.id}">${esc(b.title)}</button><p>${dateLabel(b.due_date)} · Primary payer: ${esc(b.responsible)}</p><p>${currency(b.amount)} original · ${currency(b.balance)} unpaid</p></div>${badge(b.status)}</div>`).join('');
     $('detail-dialog').showModal();
   }
@@ -285,19 +288,19 @@
     FBTProfile.update(data,connected);
     $('home-name').textContent = data.nas_name;
     $('last-synced').textContent = `Last updated ${stamp(data.synced_at)}`;
-    const unpaid = data.bills.filter(b => Number(b.balance) > 0);
+    const unpaid = data.bills.filter(b => Number(b.balance) > 0 && b.ordinary_visible!==false);
     const overdue = unpaid.filter(b => b.status === 'overdue');
     const weekEnd = new Date(data.today + 'T12:00:00'); weekEnd.setDate(weekEnd.getDate()+7);
     const coming = unpaid.filter(b => b.due_date >= data.today && new Date(b.due_date + 'T12:00:00') <= weekEnd);
     const sum = bills => bills.reduce((total,b) => total + Math.round(Number(b.balance)*100),0)/100;
     $('stats').innerHTML = [
-      ['Total unpaid',currency(sum(unpaid)),`${unpaid.length} bills to take care of`,''],
+      ['Your total unpaid balance',currency(FBTFilters.personalTotals(data.bills,data.user.id,today()).personal),`<span class="personal-month">Due this month: ${currency(FBTFilters.personalTotals(data.bills,data.user.id,today()).month)}</span><span class="family-total">Shared family unpaid: ${currency(FBTFilters.personalTotals(data.bills,data.user.id,today()).family)}</span>`,''],
       ['Due in the next 7 days',currency(sum(coming)),`${coming.length} upcoming payments`,''],
       ['Overdue',currency(sum(overdue)),`${overdue.length} bills need a look`,'warm']
     ].map(([label,value,detail,cls]) => `<article class="stat ${cls}"><p class="stat-label">${label}</p><div class="stat-value">${value}</div><p>${detail}</p></article>`).join('');
-    $('upcoming-list').innerHTML = unpaid.slice(0,5).map(b => `<div class="bill-item"><span class="category-icon" aria-hidden="true">${b.loan_id ? '↗' : '▤'}</span><div class="bill-info"><strong>${esc(b.title)}</strong><p>${dateLabel(b.due_date)} · Primary payer: ${esc(b.responsible)}</p></div><div class="bill-amount"><strong>${currency(b.balance)}</strong><div>${badge(b.status)}</div></div></div>`).join('') || '<div class="empty"><h3>Nothing on the list just yet.</h3><p>Add your first bill, or enjoy being all caught up.</p></div>';
+    $('upcoming-list').innerHTML = FBTFilters.nextUnpaid(unpaid).slice(0,5).map(b => `<div class="bill-item"><span class="category-icon" aria-hidden="true">${b.loan_id ? '↗' : '▤'}</span><div class="bill-info"><strong>${esc(b.title)}</strong><p>${dateLabel(b.due_date)} · Primary payer: ${esc(b.responsible)}</p></div><div class="bill-amount"><strong>${currency(b.balance)}</strong><div>${badge(b.status)}</div></div></div>`).join('') || '<div class="empty"><h3>Nothing on the list just yet.</h3><p>Add your first bill, or enjoy being all caught up.</p></div>';
     const activity = data.bills.flatMap(b => b.payments.map(p => ({...p, title:b.title}))).sort((a,b) => b.paid_date.localeCompare(a.paid_date)).slice(0,4);
-    $('activity-list').innerHTML = activity.map(p => `<div class="activity"><div><strong>${esc(p.title)}</strong><p>Recorded by ${esc(p.recorded_by)} · ${dateLabel(p.paid_date)}</p></div><strong>${currency(p.amount)}</strong></div>`).join('') || '<p class="small muted">Payments recorded by your family will appear here.</p>';
+    $('activity-list').innerHTML = activity.map(p => `<div class="activity"><div><strong>${esc(p.title)}</strong><p>Recorded by ${esc(p.recorded_by)} · ${dateLabel(p.paid_date)}</p></div><strong>${currency(p.amount)}</strong></div>`).join('') || '<p class="small muted">Payments you can access will appear here.</p>';
     document.querySelectorAll('select.members').forEach(select => { const previous = select.value; select.innerHTML = data.members.map(member => `<option value="${member.id}">${esc(member.username)}</option>`).join(''); select.value = previous || data.user.id; });
     for (const name of ['family_name','nas_name','server_url']) $('server-form').elements[name].value = data[name] || '';
     $('server-form').querySelectorAll('input,button').forEach(input => input.disabled = !data.user.admin || !connected || pendingRefresh || !!data.emergency);
@@ -407,13 +410,15 @@
   function formReview(form, value) {
     const rows = [];
     for (const field of form.elements) {
-      if (!field.name || field.type === 'hidden' || ['button','submit'].includes(field.type)) continue;
+      if (!field.name || field.type === 'file' || field.type === 'hidden' || ['button','submit'].includes(field.type)) continue;
       const name = field.closest('label')?.childNodes[0]?.textContent.trim() || field.labels?.[0]?.textContent.trim() || field.name.replaceAll('_',' ');
       const display = field.type === 'checkbox' ? (field.checked ? 'Yes' : 'No') : field.tagName === 'SELECT' ? field.selectedOptions[0]?.textContent : field.value || '—';
       rows.push([name, display]);
     }
     if(['bill-form','loan-form'].includes(form.id))rows.unshift(['Bill type',form.id==='loan-form'?'Loan':value.bill_type==='one-time'?'One-time bill':'Utilities']);
     if(form.id === 'payment-form') {
+      if(!value.receipt_id)throw new Error('Attach a receipt and wait for the upload to finish before reviewing.');
+      rows.push(['Evidence','Validated image attached. An attachment does not verify the external payment.']);
       const bill = data.bills.find(b=>b.id===Number(value.bill_id));
       rows.unshift(['Bill',bill.title],['Current unpaid balance',currency(bill.balance)]);
       rows.push(['Remaining after payment',currency((Math.round(Number(bill.balance)*100)-Math.round(Number(value.amount)*100))/100)]);
@@ -494,9 +499,9 @@
       $('detail-dialog').close();
       $('detail-title').textContent = bill.title;
       const parentLoan=data.loans.find(loan=>loan.id===bill.loan_id);
-      $('detail-notes').textContent = (parentLoan ? `Loan: ${parentLoan.title}. ` : '') + (bill.notes || 'No notes added.');
+      $('detail-notes').textContent = FBTEnhancements.notesText(bill,parentLoan);
       $('detail-summary').textContent = `${bill.bill_type==='one-time'?'One-time bill':bill.loan_id?'Loan':'Utilities'} · ${bill.visibility||'family'} · ${currency(bill.amount)} original · ${currency(bill.balance)} unpaid · Due ${dateLabel(bill.due_date)} · Primary payer: ${bill.responsible}`;
-      $('detail-payments').innerHTML = bill.payments.map(p => `<div class="activity"><div><strong>${currency(p.amount)}</strong><p>${dateLabel(p.paid_date)} · Recorded by ${esc(p.recorded_by)}</p>${FBTCorrections.controls('payment',p.id)}</div></div>`).join('') || '<p class="small muted">No payments recorded yet.</p>';
+      $('detail-payments').innerHTML = bill.payments.map(p => `<div class="activity"><div><strong>${currency(p.amount)}</strong><p>${dateLabel(p.paid_date)} · Recorded by ${esc(p.recorded_by)}</p>${FBTCorrections.controls('payment',p.id)}${FBTEnhancements.evidenceControls(p,bill)}</div></div>`).join('') || '<p class="small muted">No payments recorded yet.</p>';
       showDetailActions(bill);
       $('detail-dialog').showModal();
     }
@@ -601,7 +606,7 @@
       catch(_) { $('loading').innerHTML = '<h2>Sign-out is waiting for home.</h2><p>Reconnect and reload to end your server session. No saved bills are available on this device.</p>'; }
       return;
     }
-    await loadSnapshot(true); setInterval(probe,30000);
+    await loadSnapshot(true); setInterval(probe,30000); setInterval(()=>{if(data){const totals=FBTFilters.personalTotals(data.bills,data.user.id,today());const card=$('stats').firstElementChild;if(card){card.querySelector('.stat-value').textContent=currency(totals.personal);card.querySelector('.personal-month').textContent=`Due this month: ${currency(totals.month)}`;card.querySelector('.family-total').textContent=`Shared family unpaid: ${currency(totals.family)}`;}}},60000);
   }
   init();
 })();

@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError
 from django.db import connection, transaction, IntegrityError
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from tests.media_helpers import receipt
 from tracker.audit import audit_transaction
 from tracker.models import AuditEvent, Bill, Payment, Loan
 
@@ -40,13 +41,14 @@ class AuditTests(TestCase):
         self.admin = User.objects.create_superuser('reviewer', password='long-test-admin-passphrase-123')
         self.member = User.objects.create_user('family', password='long-test-member-passphrase-123')
         self.bill = Bill.objects.create(title='Audit test electricity', amount='1000.00', due_date=timezone.localdate(), responsible=self.member, created_by=self.admin)
+        self.receipt=receipt(self.bill,self.admin)
         self.client.force_login(self.admin)
 
     def post(self, path, payload):
         return self.client.post(path, json.dumps(payload), content_type='application/json')
 
     def payment(self, amount='100.00', key=None):
-        return self.post(f'/api/bills/{self.bill.pk}/payments/', {'amount':amount, 'paid_date':timezone.localdate().isoformat(), 'request_key':key or str(uuid.uuid4())})
+        return self.post(f'/api/bills/{self.bill.pk}/payments/', {'amount':amount, 'paid_date':timezone.localdate().isoformat(), 'receipt_id':str(self.receipt.pk),'request_key':key or str(uuid.uuid4())})
 
     def test_payment_and_log_have_correct_actor_and_safe_snapshot(self):
         self.assertEqual(self.payment().status_code,201)
@@ -118,7 +120,7 @@ class AuditTests(TestCase):
         self.payment('900.00')
         before=AuditEvent.objects.count()
         with self.assertRaises(IntegrityError), transaction.atomic():
-            Payment.objects.create(bill=self.bill,amount='200.00',paid_date=timezone.localdate(),recorded_by=self.admin,request_key=uuid.uuid4())
+            Payment.objects.create(receipt_required=False,bill=self.bill,amount='200.00',paid_date=timezone.localdate(),recorded_by=self.admin,request_key=uuid.uuid4())
         self.assertEqual(Payment.objects.count(),1)
         self.assertEqual(AuditEvent.objects.count(),before)
 
@@ -131,6 +133,7 @@ class AuditTests(TestCase):
 
     def test_row_delete_retains_before_snapshot(self):
         pk=self.bill.pk
+        self.receipt.delete()
         self.bill.delete()
         event=AuditEvent.objects.get(entity_type='bill',entity_id=str(pk),action='delete')
         self.assertEqual(event.before['title'],'Audit test electricity')

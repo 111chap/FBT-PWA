@@ -38,7 +38,7 @@ jobs:
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py test tests
       - run: node --test tests/*.test.cjs
-      - run: node --check static/app.js && node --check static/admin-review.js && node --check static/review.js
+      - run: node --check static/bill-enhancements.js && node --check static/security-privacy.js && node --check static/app.js && node --check static/admin-review.js && node --check static/review.js
       - run: python -m compileall -q config tracker
       - uses: actions/upload-artifact@v4
         if: always()

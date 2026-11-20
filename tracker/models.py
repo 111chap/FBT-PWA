@@ -1,4 +1,5 @@
 from decimal import Decimal
+import uuid
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -24,6 +25,7 @@ class OwnedRecord(models.Model):
 
 
 class Loan(OwnedRecord):
+    description = models.CharField(max_length=500, blank=True)
     removed = models.BooleanField(default=False)
     title = models.CharField(max_length=100)
     total = models.DecimalField(max_digits=12, decimal_places=2)
@@ -33,6 +35,7 @@ class Loan(OwnedRecord):
 
 
 class Recurrence(OwnedRecord):
+    description = models.CharField(max_length=500, blank=True)
     title = models.CharField(max_length=100)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     category = models.CharField(max_length=40, default='Household')
@@ -72,6 +75,8 @@ class Bill(OwnedRecord):
 
 
 class Payment(models.Model):
+    receipt_required = models.BooleanField(default=True)
+    receipt = models.OneToOneField('MediaAsset', null=True, on_delete=models.PROTECT, related_name='payment')
     removed = models.BooleanField(default=False)
     bill = models.ForeignKey(Bill, on_delete=models.PROTECT, related_name='payments')
     amount = models.DecimalField(max_digits=12, decimal_places=2)
@@ -81,7 +86,35 @@ class Payment(models.Model):
     request_key = models.UUIDField(unique=True)
 
     class Meta:
-        constraints = [models.CheckConstraint(condition=Q(amount__gt=0), name='payment_positive_amount')]
+        constraints = [models.CheckConstraint(condition=Q(amount__gt=0), name='payment_positive_amount'), models.CheckConstraint(condition=Q(receipt_required=False) | Q(receipt__isnull=False), name='payment_evidence_required')]
+
+
+class MediaAsset(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    purpose = models.CharField(max_length=7, choices=[('receipt', 'Receipt'), ('qr', 'QR')])
+    finalized = models.BooleanField(default=False)
+    bill = models.ForeignKey(Bill, null=True, on_delete=models.PROTECT, related_name='media_assets')
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    storage_name = models.CharField(max_length=180, unique=True)
+    sha256 = models.CharField(max_length=64)
+    size = models.PositiveIntegerField()
+    width = models.PositiveIntegerField()
+    height = models.PositiveIntegerField()
+    created_at = models.DateTimeField(default=timezone.now)
+
+
+class ReceiptRevision(models.Model):
+    payment = models.ForeignKey(Payment, on_delete=models.PROTECT, related_name='receipt_revisions')
+    asset = models.OneToOneField(MediaAsset, on_delete=models.PROTECT, related_name='revision')
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    reason = models.CharField(max_length=500)
+    created_at = models.DateTimeField(default=timezone.now)
+
+
+class PaymentQR(models.Model):
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    asset = models.ForeignKey(MediaAsset, null=True, on_delete=models.PROTECT)
+    recipient = models.CharField(max_length=100, blank=True)
 
 
 class WorkerHeartbeat(models.Model):

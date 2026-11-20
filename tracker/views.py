@@ -22,11 +22,12 @@ from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
-from .models import Bill, Loan, Payment, Recurrence, SiteSettings, LoginFailure, PushSubscription, WorkerHeartbeat, AuditEvent
+from .models import MediaAsset, ReceiptRevision, Bill, Loan, Payment, Recurrence, SiteSettings, LoginFailure, PushSubscription, WorkerHeartbeat, AuditEvent
 from .services import money, next_month, validate_server_url, validate_push_endpoint, push_ready, send_push
 from .audit import trigger_status
 from .versions import loan_version, payment_version, bill_version, settings_version, recurrence_version
 from .idempotency import idempotent
+from .media import StorageUnavailable
 from .privacy import visible, creation_privacy, require_manage, may_manage, audit_visible
 
 User = get_user_model()
@@ -43,13 +44,15 @@ def api(view):
                 if current_grant(request):
                     return JsonResponse({'error': 'Exit emergency visibility before making changes.'}, status=403)
             return view(request, *args, **kwargs)
+        except StorageUnavailable:
+            return JsonResponse({'error':'Private image storage is unavailable or failed verification. No new payment was recorded. Check NAS storage and attach the image again.'},status=503)
         except PermissionDenied:
             return JsonResponse({'error': 'This action is not available for this record.'}, status=403)
         except ValidationError as error:
             return JsonResponse({'error': ' '.join(error.messages)}, status=400)
         except (ValueError, TypeError, KeyError, json.JSONDecodeError):
             return JsonResponse({'error': 'Some details are invalid. Check the form and try again.'}, status=400)
-        except (Bill.DoesNotExist, Loan.DoesNotExist, Payment.DoesNotExist, Recurrence.DoesNotExist, User.DoesNotExist):
+        except (MediaAsset.DoesNotExist, Bill.DoesNotExist, Loan.DoesNotExist, Payment.DoesNotExist, Recurrence.DoesNotExist, User.DoesNotExist):
             return JsonResponse({'error': 'This record is no longer available.'}, status=404)
         except IntegrityError:
             return JsonResponse({'error': 'This record was just changed by another request. Refresh before retrying.'}, status=409)
@@ -209,12 +212,13 @@ def snapshot(request, emergency=False):
     site = SiteSettings.objects.filter(pk=1).first() or SiteSettings()
     bills = []
     loan_bills = {}
+    ordinary_ids = set(visible(Bill, request.user).values_list('pk',flat=True)) if emergency else None
     for bill in (Bill.objects.all() if emergency else visible(Bill, request.user)).filter(removed=False).select_related('responsible', 'created_by', 'loan', 'recurrence').prefetch_related('payments__recorded_by'):
         if bill.loan_id:loan_bills.setdefault(bill.loan_id,[]).append(bill)
         balance = bill.balance
         state = 'paid' if balance <= 0 else 'overdue' if bill.due_date < timezone.localdate() else 'partial' if bill.paid else 'upcoming'
-        bills.append({'bill_type': 'loan' if bill.loan_id else bill.bill_type, 'owner_id': bill.owner_id, 'visibility': bill.visibility, 'can_manage': not emergency and may_manage(request.user, bill), 'version': bill_version(bill), 'responsible_id': bill.responsible_id, 'recurrence_id': bill.recurrence_id, 'id': bill.pk, 'title': bill.title, 'amount': str(bill.amount), 'balance': str(balance), 'due_date': bill.due_date.isoformat(), 'category': bill.category, 'notes': bill.notes, 'responsible': bill.responsible.username, 'status': state, 'loan_id': bill.loan_id, 'recurring': bool(bill.recurrence_id), 'payments': [{'id':p.pk,'version':payment_version(p),'amount': str(p.amount), 'paid_date': p.paid_date.isoformat(), 'recorded_by': p.recorded_by.username, 'recorded_by_id': p.recorded_by_id} for p in bill.payments.all() if not p.removed]})
-    return JsonResponse({'version': 1, 'offline_safe': not emergency, 'emergency': emergency, 'synced_at': timezone.now().isoformat(), 'today': timezone.localdate().isoformat(), 'currency': 'PHP', 'settings_version': settings_version(site), 'recurrences': [{'id': r.pk, 'owner_id': r.owner_id, 'visibility': r.visibility, 'can_manage': not emergency and may_manage(request.user,r), 'title': r.title, 'anchor_day': r.anchor_day, 'active': r.active, 'removed': r.removed, 'next_due': r.next_due.isoformat(), 'responsible_id': r.responsible_id, 'version': recurrence_version(r)} for r in (Recurrence.objects.all() if emergency else visible(Recurrence, request.user))], 'family_name': site.family_name, 'nas_name': site.nas_name, 'server_url': site.server_url, 'user': {'id': request.user.pk, 'name': request.user.username, 'admin': request.user.is_superuser}, 'members': list(User.objects.filter(is_active=True).values('id', 'username')), 'bills': bills, 'loans': [{'id': loan.pk, 'title': loan.title, 'total': str(loan.total), 'installments': loan.installments, 'owner_id': loan.owner_id, 'visibility': loan.visibility, 'can_manage': not emergency and may_manage(request.user, loan), 'version':loan_version(loan,loan_bills.get(loan.pk,[]))} for loan in (Loan.objects.all() if emergency else visible(Loan, request.user)).filter(removed=False)], 'vapid_public_key': settings.VAPID_PUBLIC_KEY if push_ready() else ''})
+        bills.append({'ordinary_visible': not emergency or bill.pk in ordinary_ids, 'shared_description': bill.loan.description if bill.loan_id else bill.recurrence.description if bill.recurrence_id else '', 'bill_type': 'loan' if bill.loan_id else bill.bill_type, 'owner_id': bill.owner_id, 'visibility': bill.visibility, 'can_manage': not emergency and may_manage(request.user, bill), 'version': bill_version(bill), 'responsible_id': bill.responsible_id, 'recurrence_id': bill.recurrence_id, 'id': bill.pk, 'title': bill.title, 'amount': str(bill.amount), 'balance': str(balance), 'due_date': bill.due_date.isoformat(), 'category': bill.category, 'notes': bill.notes, 'responsible': bill.responsible.username, 'status': state, 'loan_id': bill.loan_id, 'recurring': bool(bill.recurrence_id), 'payments': [{'id':p.pk,'version':payment_version(p),'amount': str(p.amount), 'paid_date': p.paid_date.isoformat(), 'recorded_by': p.recorded_by.username, 'recorded_by_id': p.recorded_by_id, 'has_receipt': bool(p.receipt_id), 'legacy_receipt': not p.receipt_required} for p in bill.payments.all() if not p.removed]})
+    return JsonResponse({'version': 1, 'upload_limits': {'bytes': settings.FBT_UPLOAD_MAX_BYTES, 'pixels':settings.FBT_IMAGE_MAX_PIXELS}, 'offline_safe': not emergency, 'emergency': emergency, 'synced_at': timezone.now().isoformat(), 'today': timezone.localdate().isoformat(), 'currency': 'PHP', 'settings_version': settings_version(site), 'recurrences': [{'id': r.pk, 'owner_id': r.owner_id, 'visibility': r.visibility, 'description': r.description, 'can_manage': not emergency and may_manage(request.user,r), 'title': r.title, 'anchor_day': r.anchor_day, 'active': r.active, 'removed': r.removed, 'next_due': r.next_due.isoformat(), 'responsible_id': r.responsible_id, 'version': recurrence_version(r)} for r in (Recurrence.objects.all() if emergency else visible(Recurrence, request.user))], 'family_name': site.family_name, 'nas_name': site.nas_name, 'server_url': site.server_url, 'user': {'id': request.user.pk, 'name': request.user.username, 'admin': request.user.is_superuser}, 'members': list(User.objects.filter(is_active=True).values('id', 'username')), 'bills': bills, 'loans': [{'id': loan.pk, 'title': loan.title, 'total': str(loan.total), 'installments': loan.installments, 'owner_id': loan.owner_id, 'visibility': loan.visibility, 'description': loan.description, 'can_manage': not emergency and may_manage(request.user, loan), 'version':loan_version(loan,loan_bills.get(loan.pk,[]))} for loan in (Loan.objects.all() if emergency else visible(Loan, request.user)).filter(removed=False)], 'vapid_public_key': settings.VAPID_PUBLIC_KEY if push_ready() else ''})
 
 
 @require_POST
@@ -236,8 +240,8 @@ def create_bill(request):
     with transaction.atomic():
         recurrence = None
         if data.get('repeat_monthly') is True:
-            recurrence = Recurrence.objects.create(**privacy, title=title, amount=amount, category=category, next_due=next_month(due, due.day), anchor_day=due.day, responsible=responsible, created_by=request.user)
-        bill = Bill.objects.create(**privacy, bill_type=bill_type, title=title, amount=amount, due_date=due, category=category, notes=text(data, 'notes', 500), responsible=responsible, created_by=request.user, recurrence=recurrence)
+            recurrence = Recurrence.objects.create(**privacy, description=text(data,'notes',500), title=title, amount=amount, category=category, next_due=next_month(due, due.day), anchor_day=due.day, responsible=responsible, created_by=request.user)
+        bill = Bill.objects.create(**privacy, bill_type=bill_type, title=title, amount=amount, due_date=due, category=category, notes='' if recurrence else text(data, 'notes', 500), responsible=responsible, created_by=request.user, recurrence=recurrence)
     return JsonResponse({'id': bill.pk}, status=201)
 
 
@@ -254,7 +258,7 @@ def record_payment(request, bill_id):
         bill = visible(Bill, request.user).select_for_update().get(pk=bill_id)
         previous = Payment.objects.filter(request_key=request_key).first()
         if previous:
-            if previous.bill_id == bill.pk and previous.recorded_by_id == request.user.pk and previous.amount == amount and previous.paid_date == paid_date:
+            if previous.bill_id == bill.pk and previous.recorded_by_id == request.user.pk and previous.amount == amount and previous.paid_date == paid_date and str(previous.receipt_id) == str(data.get('receipt_id')):
                 return JsonResponse({'id': previous.pk, 'already_recorded': True})
             return JsonResponse({'error': 'This payment reference has already been used.'}, status=409)
         if amount > bill.balance:
@@ -263,7 +267,12 @@ def record_payment(request, bill_id):
             raise ValidationError('This bill was removed. Refresh your records.')
         if data.get('expected_version') and data['expected_version'] != bill_version(bill):
             return JsonResponse({'error': 'This bill changed after review. Refresh and review the payment again.'}, status=409)
-        payment = Payment.objects.create(bill=bill, amount=amount, paid_date=paid_date, recorded_by=request.user, request_key=request_key)
+        from .media import eligible_receipt, finalize
+        asset=eligible_receipt(data.get('receipt_id'),bill,request.user)
+        asset.finalized=True;asset.save(update_fields=['finalized'])
+        payment = Payment.objects.create(bill=bill, amount=amount, paid_date=paid_date, recorded_by=request.user, request_key=request_key,receipt=asset,receipt_required=True)
+        finalize(asset,'loan' if bill.loan_id else bill.bill_type,payment.pk)
+        ReceiptRevision.objects.create(payment=payment,asset=asset,actor=request.user,reason='Original payment evidence')
     return JsonResponse({'id': payment.pk}, status=201)
 
 
@@ -287,7 +296,7 @@ def create_loan(request):
     # Round down so the final installment remains positive for very small loans.
     installment = (total // Decimal('.01') // count) * Decimal('.01')
     with transaction.atomic():
-        loan = Loan.objects.create(**privacy, title=title, total=total, installments=count, created_by=request.user)
+        loan = Loan.objects.create(**privacy, description=text(data,'notes',500), title=title, total=total, installments=count, created_by=request.user)
         for index in range(count):
             amount = total - installment * (count - 1) if index == count - 1 else installment
             Bill.objects.create(**privacy, bill_type='loan', title=f'{title[:85]} · {index + 1}/{count}', amount=amount, due_date=due, category='Loan', responsible=responsible, created_by=request.user, loan=loan)
@@ -407,6 +416,11 @@ def status(request):
     checks.append({'name': 'Your registered devices', 'state': 'configured' if PushSubscription.objects.filter(user=request.user).exists() else 'warning', 'detail': f'{PushSubscription.objects.filter(user=request.user).count()} notification subscription(s) for your account.'})
     checks.append({'name': 'Docker / NAS', 'state': 'manual', 'detail': 'Check Container Manager → Project → fbt. The app deliberately has no Docker-control access.'})
     checks.append({'name': 'Backup recovery', 'state': 'manual', 'detail': 'A backup is not verified until restored. Follow the backup and restore guide.'})
+    from pathlib import Path
+    import os
+    media_path=Path(settings.MEDIA_ROOT)
+    writable=media_path.is_dir() and os.access(media_path,os.R_OK|os.W_OK)
+    checks.append({'name':'Private image storage','state':'configured' if writable else 'warning','detail':'Private storage is available. Images are verified when opened; include images in every backup.' if writable else 'Private images cannot be saved yet. Check the NAS image-storage mount, permissions and free space.'})
     checks.append(trigger_status())
     return JsonResponse({'checked_at': timezone.now().isoformat(), 'checks': checks})
 
@@ -491,7 +505,7 @@ def audit_history(request):
     if search:
         events = events.filter(Q(label__icontains=search) | Q(actor_name__icontains=search) | Q(transaction_id__icontains=search) | Q(entity_id__iexact=search) | Q(reason__icontains=search) | Q(before__icontains=search) | Q(after__icontains=search))
     choices = {
-        'entity_type': {'bill', 'payment', 'loan', 'recurrence', 'settings', 'account', 'access', 'device', 'reminder', 'system'},
+        'entity_type': {'bill', 'payment', 'loan', 'recurrence', 'settings', 'account', 'access', 'device', 'reminder', 'system', 'attachment', 'evidence', 'qr'},
         'action': {'insert', 'update', 'delete', 'started'},
         'source': {'app', 'admin', 'setup', 'worker', 'database', 'migration'},
     }

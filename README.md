@@ -11,7 +11,9 @@ A self-hosted family bill and loan repayment tracker for Android, iPhone, and de
 - Guided Utilities/Loan/One-time bill entry, live installment previews, partial/full payments, and CSV export.
 - Shared paid-bills history with payer/recorder filters and read-only offline access.
 - Clickable bill headings for alphabetical, date, original/unpaid amount, and status sorting.
-- Monthly fixed-amount recurring bills and agreed loan installment schedules.
+- Monthly fixed-amount recurring bills and agreed loan installment schedules, with shared descriptions and only the next unpaid installment in the main list.
+- Personal assigned/monthly totals, 7/3/1/due-day reminders, private receipt evidence, and an administrator-configured household QR.
+- Persistent private image storage with validated uploads, retained revisions, and complete database/media backup guidance.
 - Dashboard and phone-sized layouts for upcoming, overdue, and paid records.
 - System status with actual database checks and worker heartbeat age.
 - First-time Synology setup guide with a local private configuration generator.
@@ -20,6 +22,8 @@ A self-hosted family bill and loan repayment tracker for Android, iPhone, and de
 - Web Push subscription, device test, and scheduled reminders when configured.
 - Security and payment tests, including simultaneous payments against PostgreSQL.
 - Administrator audit review with database-triggered history, safe before/after snapshots, and grouped transaction references.
+
+See [receipt/QR and migration 0007 upgrade instructions](docs/NOTES-RECEIPTS-QR-AND-REMINDERS.md) before updating an existing NAS. Backups now need images too.
 
 The app does not connect to banks, detect payments, or transfer money. Family members enter records manually.
 

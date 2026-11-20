@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError, ImproperlyConfigured
 from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 from tracker.models import Bill, Payment, SiteSettings, PushSubscription, LoginFailure
+from tests.media_helpers import receipt
 from tracker.services import validate_push_endpoint, validate_server_url
 
 User = get_user_model()
@@ -144,7 +145,7 @@ class SecurityTests(TestCase):
         client=Client(enforce_csrf_checks=True)
         client.force_login(self.member)
         client.get('/app/')
-        response=client.post(f'/api/bills/{self.bill.pk}/payments/',json.dumps({'amount':'100.00','paid_date':timezone.localdate().isoformat(),'request_key':str(uuid.uuid4())}),content_type='application/json',HTTP_X_CSRFTOKEN=client.cookies['csrftoken'].value)
+        response=client.post(f'/api/bills/{self.bill.pk}/payments/',json.dumps({'receipt_id':str(receipt(self.bill,self.member).pk),'amount':'100.00','paid_date':timezone.localdate().isoformat(),'request_key':str(uuid.uuid4())}),content_type='application/json',HTTP_X_CSRFTOKEN=client.cookies['csrftoken'].value)
         self.assertEqual(response.status_code,201)
 
 

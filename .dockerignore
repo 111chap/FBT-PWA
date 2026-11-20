@@ -3,8 +3,17 @@
 node_modules
 .env
 .env.*
+*.env
 data
 backups
+media
+secrets
+*.pem
+*.key
+*.dump
+*.sql
+*.tar
+*.zip
 tmp
 output
 staticfiles

@@ -1,4 +1,17 @@
 from django.conf import settings
+from django.http import JsonResponse
+
+
+class UploadLimits:
+    def __init__(self,get_response):self.get_response=get_response
+
+    def __call__(self,request):
+        if request.path=='/api/media/upload/' and request.method=='POST':
+            try: length=int(request.META.get('CONTENT_LENGTH') or 0)
+            except ValueError:length=-1
+            if length<0 or length>settings.FBT_UPLOAD_MAX_BYTES+65536:
+                return JsonResponse({'error':'This upload exceeds the image size limit.'},status=413)
+        return self.get_response(request)
 
 
 class SecurityHeaders:

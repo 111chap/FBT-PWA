@@ -21,6 +21,7 @@ class Command(BaseCommand):
                 with audit_transaction(source='worker'):
                     # The lock prevents two deployed workers from scheduling concurrently.
                     WorkerHeartbeat.objects.select_for_update().get(name='reminders')
+                    from tracker.media import cleanup_unused
                     materialize_recurring()
                     deliver_reminders()
                     from tracker.models import EmergencyGrant
@@ -29,6 +30,11 @@ class Command(BaseCommand):
                         end_grant(grant, 'expired')
                     LoginFailure.objects.filter(created_at__lt=timezone.now() - timedelta(days=1)).delete()
                     WorkerHeartbeat.objects.filter(name='reminders').update(updated_at=timezone.now(), detail='Schedule checked successfully')
+                try:
+                    with audit_transaction(source='worker'):
+                        cleanup_unused()
+                except Exception:
+                    self.stderr.write('Private image cleanup failed. Reminder results were retained; check image storage and audit logs.')
             except Exception:
                 self.stderr.write('Worker cycle failed. Check database connectivity and configuration.')
                 if options['once']:

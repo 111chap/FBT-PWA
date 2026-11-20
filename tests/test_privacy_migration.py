@@ -32,7 +32,7 @@ class PrivacyMigrationTests(TransactionTestCase):
             with self.assertRaises(IrreversibleError):MigrationExecutor(connection).migrate(old)
             self.assertEqual(trigger_status()['state'],'healthy')
         finally:
-            MigrationExecutor(connection).migrate(latest)
+            MigrationExecutor(connection).migrate([('tracker','0007_notes_receipts_and_qr')])
 
     def test_database_rejects_private_records_without_owner_and_repeating_one_time(self):
         from tracker.models import Bill, Recurrence

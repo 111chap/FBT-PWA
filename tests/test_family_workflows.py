@@ -85,7 +85,7 @@ class FamilyWorkflowTests(TestCase):
         self.assertEqual(Bill.objects.count(),1)
 
     def test_removal_of_paid_schedule_rejected_without_partial_changes(self):
-        Payment.objects.create(bill=self.bill,amount='1',paid_date=timezone.localdate(),recorded_by=self.member,request_key=uuid.uuid4())
+        Payment.objects.create(receipt_required=False,bill=self.bill,amount='1',paid_date=timezone.localdate(),recorded_by=self.member,request_key=uuid.uuid4())
         count=AuditEvent.objects.count()
         self.assertEqual(self.lifecycle('remove').status_code,400)
         self.assertEqual(AuditEvent.objects.count(),count)
@@ -101,7 +101,7 @@ class FamilyWorkflowTests(TestCase):
 
     def test_stale_payment_requires_new_review_even_if_balance_sufficient(self):
         token=bill_version(self.bill)
-        Payment.objects.create(bill=self.bill,amount='1',paid_date=timezone.localdate(),recorded_by=self.member,request_key=uuid.uuid4())
+        Payment.objects.create(receipt_required=False,bill=self.bill,amount='1',paid_date=timezone.localdate(),recorded_by=self.member,request_key=uuid.uuid4())
         response=self.post(f'/api/bills/{self.bill.pk}/payments/',{'amount':'1','paid_date':timezone.localdate().isoformat(),'request_key':str(uuid.uuid4()),'expected_version':token})
         self.assertEqual(response.status_code,409)
         self.assertEqual(Payment.objects.count(),1)
@@ -136,7 +136,7 @@ class FamilyWorkflowTests(TestCase):
         self.assertEqual(SiteSettings.objects.count(),1)
 
     def test_payer_scope_is_explicit_and_payment_attribution_retained(self):
-        Payment.objects.create(bill=self.bill,amount='1',paid_date=timezone.localdate(),recorded_by=self.member,request_key=uuid.uuid4())
+        Payment.objects.create(receipt_required=False,bill=self.bill,amount='1',paid_date=timezone.localdate(),recorded_by=self.member,request_key=uuid.uuid4())
         self.assertEqual(self.assign().status_code,200)
         self.schedule.refresh_from_db(); self.bill.refresh_from_db()
         self.assertEqual(self.schedule.responsible_id,self.member.pk)

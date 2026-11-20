@@ -24,4 +24,4 @@ class CorrectionMigrationTests(TransactionTestCase):
             with self.assertRaises(IrreversibleError):MigrationExecutor(connection).migrate(old)
             self.assertTrue(apps.get_model('tracker','Payment').objects.get(pk=payment.pk).removed)
             self.assertEqual(trigger_status()['state'],'healthy')
-        finally:MigrationExecutor(connection).migrate([('tracker','0006_privacy_pin_bill_types')])
+        finally:MigrationExecutor(connection).migrate([('tracker','0007_notes_receipts_and_qr')])

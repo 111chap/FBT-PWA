@@ -1,5 +1,9 @@
 # NAS setup and operations
 
+## Receipt and QR storage upgrade
+
+Migration 0007 adds protected images and shared notes. **A database dump and .env alone are no longer a complete backup.** Use [the current upgrade, media backup and isolated restore guide](NOTES-RECEIPTS-QR-AND-REMINDERS.md), including `tools/backup_nas.sh`. Recreate the project with the updated Compose media volume. Earlier database-only examples below are components of a backup, not a complete recovery set.
+
 ## Start with the visual guide
 
 Open `setup/index.html` from a downloaded source folder, or visit `/setup-guide/` on a running app. It walks through Synology Container Manager, privately generating `.env`, configuring HTTPS, creating the first account, and installing the app on phones.
@@ -85,7 +89,7 @@ Signing out clears the offline copy and notifies other open tabs. Signing out of
 
 ## Back up
 
-Back up PostgreSQL and `.env` to an access-controlled destination outside the NAS. Set a schedule and retention appropriate for your household. For an administrator comfortable with a terminal:
+Pause web/worker and back up PostgreSQL, `.env`, and the matching private media archive to an access-controlled destination outside the NAS. Run `verify_media` and use the complete backup helper linked above. Set a schedule and retention appropriate for your household. For an administrator comfortable with a terminal:
 
 ```sh
 mkdir -p backups
@@ -102,7 +106,7 @@ Restore in a separate environment, not over the only live database. Using a sepa
 docker compose exec -T db pg_restore -U fbt -d fbt --no-owner --no-privileges < backups/fbt.dump
 ```
 
-This example assumes an empty destination. Verify account access, bills, payment totals, and installment schedules. Disable the reminder worker in the restore environment to prevent duplicate notifications. Do not delete or replace production volumes without a verified backup and explicit recovery plan.
+This database-only example assumes an empty isolated destination. Also restore the matching media archive into its separate media volume and run `python manage.py verify_media`. Verify account access, bills, notes, receipts, QR configuration, payment totals, and installment schedules. Disable the reminder worker in the restore environment to prevent duplicate notifications. Do not delete or replace production volumes without a verified backup and explicit recovery plan.
 
 ## Updates
 
@@ -114,7 +118,7 @@ colors and saved theme preference match the main family app.
 1. Choose a reviewed/merged version and read its migration notes. Ask the family
    to pause writes, then stop `web` and `worker` while leaving `db` running for
    the backup.
-2. Back up PostgreSQL and the existing `.env`; securely copy both off the NAS.
+2. Back up PostgreSQL, the existing `.env`, and private media; securely copy the complete set off the NAS.
    Retain the old app version and use a new backup filename for each update.
 3. Stop the remaining project containers and replace app source in the **same
    project folder**. Preserve `.env`, the Compose project name, and the original

@@ -13,6 +13,8 @@ media/
 *.sqlite3
 *.sqlite3-*
 *.dump
+*.tar
+settings.env
 *.sql
 *.log
 

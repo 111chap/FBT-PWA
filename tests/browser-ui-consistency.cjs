@@ -45,7 +45,7 @@ const base=process.argv[2];
     }
     await page.goto(base+'/app/#setup');await page.locator('#enable-offline').click();await page.waitForFunction(()=>localStorage.getItem('fbt-offline-enabled')==='yes');
     await context.setOffline(true);await page.goto(base+'/app/#bills');await page.reload();await page.locator('#bills').waitFor();await page.locator('#search').fill('Unpaid utility');await page.locator('#bill-rows .bill-detail').click();
-    await equalButtons('#detail-actions button');assert.equal(await page.locator('#detail-actions button:disabled').count(),3);assert.match(await page.locator('#detail-action-status').innerText(),/Connect to your home server/);
+    await equalButtons('#detail-actions button');assert.ok(await page.locator('#detail-actions button').evaluateAll(buttons=>buttons.length>=3&&buttons.every(button=>button.disabled)));assert.match(await page.locator('#detail-action-status').innerText(),/Connect to your home server/);
     assert.ok(await page.locator('#detail-actions button').evaluateAll(buttons=>buttons.every(b=>getComputedStyle(b).opacity==='1')));
     await page.screenshot({path:'tmp/browser-qa/bill-actions-offline.png'});assert.deepEqual(errors,[]);
     console.log('Login/guide/home theme persistence and matching bill, payer, loan, payment and offline action controls passed.');
