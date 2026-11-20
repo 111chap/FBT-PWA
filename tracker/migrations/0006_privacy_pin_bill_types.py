@@ -23,7 +23,8 @@ def reverse_guard(apps, schema_editor):
     if (any(apps.get_model('tracker', name).objects.using(alias).filter(visibility='private').exists() for name in ('Bill', 'Loan', 'Recurrence'))
         or apps.get_model('tracker', 'Bill').objects.using(alias).filter(bill_type='one-time').exists()
         or apps.get_model('tracker', 'PinCredential').objects.using(alias).exists()
-        or apps.get_model('tracker', 'EmergencyGrant').objects.using(alias).exists()):
+        or apps.get_model('tracker', 'EmergencyGrant').objects.using(alias).exists()
+        or apps.get_model('tracker', 'AuditEvent').objects.using(alias).filter(models.Q(before__visibility='private') | models.Q(after__visibility='private')).exists()):
         raise IrreversibleError('Privacy/PIN/type data exists. Restore the complete pre-upgrade backup instead of dropping security fields.')
     _audit_v4.uninstall(apps, schema_editor)
 

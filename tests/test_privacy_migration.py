@@ -27,6 +27,9 @@ class PrivacyMigrationTests(TransactionTestCase):
             self.assertEqual(trigger_status()['state'],'healthy')
             apps.get_model('tracker','Bill').objects.filter(pk=bill.pk).update(visibility='private')
             with self.assertRaises(IrreversibleError):MigrationExecutor(connection).migrate(old)
+            # A later share must not make a downgrade expose private audit history.
+            apps.get_model('tracker','Bill').objects.filter(pk=bill.pk).update(visibility='family')
+            with self.assertRaises(IrreversibleError):MigrationExecutor(connection).migrate(old)
             self.assertEqual(trigger_status()['state'],'healthy')
         finally:
             MigrationExecutor(connection).migrate(latest)
